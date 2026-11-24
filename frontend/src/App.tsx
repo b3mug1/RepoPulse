@@ -1,29 +1,51 @@
-import { Routes, Route } from 'react-router-dom';
+import { Link, Routes, Route, useLocation } from 'react-router-dom';
+import { lazy, Suspense, useEffect } from 'react';
+import anime from 'animejs';
+import { ArrowUpRight, Github } from 'lucide-react';
 import HomePage from './pages/HomePage';
-import AnalysisPage from './pages/AnalysisPage';
+
+const AnalysisPage = lazy(() => import('./pages/AnalysisPage'));
+import BrandMark from './components/BrandMark';
 
 export default function App() {
+  const location = useLocation();
+
+  useEffect(() => {
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduceMotion) return;
+    anime({
+      targets: '.page-shell',
+      opacity: [0, 1],
+      translateY: [10, 0],
+      duration: 500,
+      easing: 'easeOutCubic',
+    });
+  }, [location.pathname]);
+
   return (
-    <div className="min-h-screen relative">
-      <div className="bg-mesh" />
-      <header className="sticky top-0 z-50 glass border-0 border-b border-white/40">
-        <div className="mx-auto max-w-6xl px-6 py-4 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-            <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
-            </svg>
-          </div>
-          <span className="text-sm font-semibold tracking-wide text-slate-700">
-            Repo Analyzer
-          </span>
+    <div className="app-shell min-h-screen">
+      <div className="ambient ambient-one" />
+      <div className="ambient ambient-two" />
+      <header className="topbar">
+        <div className="topbar-inner">
+          <Link to="/" className="brand-lockup" aria-label="RepoPulse home">
+            <BrandMark />
+            <span className="brand-name">repo<span>pulse</span></span>
+          </Link>
+          <nav className="topbar-nav" aria-label="Main navigation">
+            <a href="https://github.com" target="_blank" rel="noreferrer" className="nav-link"><Github size={15} /> Open source <ArrowUpRight size={13} /></a>
+            <span className="nav-divider" />
+            <span className="status-pill"><i /> Systems operational</span>
+          </nav>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-6 py-10">
+      <main className="page-shell">
         <Routes>
           <Route path="/" element={<HomePage />} />
-          <Route path="/analysis/:id" element={<AnalysisPage />} />
+          <Route path="/analysis/:id" element={<Suspense fallback={<div className="analysis-page loading-copy">Opening report…</div>}><AnalysisPage /></Suspense>} />
         </Routes>
       </main>
+      <footer className="site-footer"><span>RepoPulse</span><span>Open source intelligence for the people who build.</span><span>Made for curious teams <b>✳</b></span></footer>
     </div>
   );
 }

@@ -55,11 +55,28 @@ export interface AnalysisDetail {
   id: string;
   repository_id: string;
   status: string;
+  progress_stage: string;
+  health: {
+    score: number;
+    grade: string;
+    breakdown: Record<string, number>;
+    findings: { severity: string; title: string; detail: string }[];
+  };
   error_message: string | null;
   metrics: Metrics;
   ai_insights: AIInsights;
   contributors: Contributor[];
   commits_count: number;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface AnalysisHistoryItem {
+  id: string;
+  status: string;
+  total_commits: number;
+  bus_factor: number;
+  health_score: number;
   created_at: string;
   completed_at: string | null;
 }
@@ -73,6 +90,11 @@ export async function analyzeRepo(owner: string, name: string): Promise<AnalyzeR
 
 export async function getAnalysis(analysisId: string): Promise<AnalysisDetail> {
   const { data } = await api.get(`/analyses/${analysisId}`);
+  return data;
+}
+
+export async function getAnalysisHistory(repositoryId: string): Promise<AnalysisHistoryItem[]> {
+  const { data } = await api.get('/analyses/', { params: { repository_id: repositoryId, limit: 10 } });
   return data;
 }
 
