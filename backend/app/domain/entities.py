@@ -56,6 +56,10 @@ class Analysis:
     avg_time_between_commits_hours: float = 0.0
     bus_factor: int = 0
     language_distribution: dict[str, float] = field(default_factory=dict)
+    health_score: int = 0
+    health_breakdown: dict[str, int] = field(default_factory=dict)
+    health_findings: list[dict[str, str]] = field(default_factory=list)
+    progress_stage: str = "queued"
 
     ai_summary: Optional[str] = None
     readme_quality_score: Optional[float] = None

@@ -33,6 +33,7 @@ from app.domain.services import (
     compute_code_churn,
     compute_commits_per_day,
     compute_commits_per_month,
+    calculate_repository_health,
 )
 from app.infrastructure.database.models import (
     AnalysisModel,
@@ -69,7 +70,7 @@ def run_analysis_task(self, analysis_id: str, owner: str, name: str) -> dict:
         _update_status(session, analysis_id, AnalysisStatus.IN_PROGRESS)
 
         # ── Run the async pipeline in a one-shot event loop ──
-        result = asyncio.run(_analyze(analysis_id, owner, name))
+        result = asyncio.run(_analyze(analysis_id, owner, name, session))
 
         # ── Persist results ──────────────────────────────────
         _save_results(session, analysis_id, result)
@@ -90,7 +91,7 @@ def run_analysis_task(self, analysis_id: str, owner: str, name: str) -> dict:
         session.close()
 
 
-async def _analyze(analysis_id: str, owner: str, name: str) -> dict:
+async def _analyze(analysis_id: str, owner: str, name: str, session: Session) -> dict:
     """
     Async pipeline:
     1. Fetch commits + details (with caching)
@@ -104,6 +105,7 @@ async def _analyze(analysis_id: str, owner: str, name: str) -> dict:
     gh = CachedGitHubClient(gh_raw, cache)
     gemini = GeminiClient()
 
+    _set_progress(session, analysis_id, "Fetching GitHub data")
     # ── Step 1: Fetch data ───────────────────────────────────────────────
     commits_list = await gh.get_commits(owner, name, max_pages=5)
     languages_raw = await gh.get_languages(owner, name)
@@ -118,6 +120,7 @@ async def _analyze(analysis_id: str, owner: str, name: str) -> dict:
     import asyncio
     BATCH_SIZE = 10
     for i in range(0, len(shas), BATCH_SIZE):
+        _set_progress(session, analysis_id, f"Loading commit details ({min(i + BATCH_SIZE, len(shas))}/{len(shas)})")
         batch = shas[i : i + BATCH_SIZE]
         details = await asyncio.gather(
             *(gh.get_commit_detail(owner, name, sha) for sha in batch)
@@ -125,6 +128,7 @@ async def _analyze(analysis_id: str, owner: str, name: str) -> dict:
         for detail in details:
             commit_entities.append(gh_raw.parse_commit(detail, aid))
 
+    _set_progress(session, analysis_id, "Calculating repository metrics")
     # ── Step 2: Compute metrics ──────────────────────────────────────────
     additions, deletions = compute_code_churn(commit_entities)
     contributors = aggregate_contributors(commit_entities, aid)
@@ -145,6 +149,15 @@ async def _analyze(analysis_id: str, owner: str, name: str) -> dict:
         "bus_factor": calculate_bus_factor(contributors),
         "language_distribution": language_distribution,
     }
+    latest_commit_at = max((item.committed_at for item in commit_entities), default=None)
+    health_score, health_breakdown, health_findings = calculate_repository_health(
+        commits_per_month=metrics["commits_per_month"],
+        bus_factor=metrics["bus_factor"],
+        contributor_count=len(contributors),
+        readme_score=None,
+        file_paths=file_paths,
+        latest_commit_at=latest_commit_at,
+    )
 
     # ── Step 3: AI analysis — single consolidated call (1 API request) ──
     ai_results = {
@@ -154,9 +167,18 @@ async def _analyze(analysis_id: str, owner: str, name: str) -> dict:
         "detected_tech_stack": [],
         "architecture_analysis": None,
     }
+    _set_progress(session, analysis_id, "Generating AI insights")
     try:
         ai_results = await gemini.analyze_repository(
             f"{owner}/{name}", None, language_distribution, file_paths, readme
+        )
+        health_score, health_breakdown, health_findings = calculate_repository_health(
+            commits_per_month=metrics["commits_per_month"],
+            bus_factor=metrics["bus_factor"],
+            contributor_count=len(contributors),
+            readme_score=ai_results.get("readme_quality_score"),
+            file_paths=file_paths,
+            latest_commit_at=latest_commit_at,
         )
     except Exception as ai_err:
         logger.warning("AI analysis skipped (non-fatal)", error=str(ai_err))
@@ -166,6 +188,9 @@ async def _analyze(analysis_id: str, owner: str, name: str) -> dict:
     return {
         **metrics,
         **ai_results,
+        "health_score": health_score,
+        "health_breakdown": health_breakdown,
+        "health_findings": health_findings,
         "commit_entities": commit_entities,
         "contributors": contributors,
     }
@@ -185,6 +210,16 @@ def _update_status(
             analysis.error_message = error_message
         if status == AnalysisStatus.COMPLETED:
             analysis.completed_at = datetime.utcnow()
+            analysis.progress_stage = "Completed"
+        elif status == AnalysisStatus.FAILED:
+            analysis.progress_stage = "Failed"
+        session.commit()
+
+
+def _set_progress(session: Session, analysis_id: str, stage: str) -> None:
+    analysis = session.get(AnalysisModel, uuid.UUID(analysis_id))
+    if analysis:
+        analysis.progress_stage = stage
         session.commit()
 
 
@@ -204,6 +239,9 @@ def _save_results(session: Session, analysis_id: str, result: dict) -> None:
     analysis.avg_time_between_commits_hours = result["avg_time_between_commits_hours"]
     analysis.bus_factor = result["bus_factor"]
     analysis.language_distribution = result["language_distribution"]
+    analysis.health_score = result["health_score"]
+    analysis.health_breakdown = result["health_breakdown"]
+    analysis.health_findings = result["health_findings"]
 
     # AI
     analysis.ai_summary = result["ai_summary"]
