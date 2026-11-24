@@ -1,7 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import anime from 'animejs';
 import { analyzeRepo } from '../api/client';
-import { Search, Loader2, ArrowRight, BarChart3, Brain, GitFork } from 'lucide-react';
+import { Search, Loader2, ArrowUpRight, BarChart3, Brain, GitFork, ShieldCheck, GitCommitHorizontal, Sparkles, Activity, Command } from 'lucide-react';
+
+const features = [
+  { icon: BarChart3, number: '01', title: 'Signal over noise', desc: 'A clear picture of velocity, code churn and the rhythm of a project.' },
+  { icon: GitFork, number: '02', title: 'People behind code', desc: 'Understand contribution patterns and spot knowledge bottlenecks.' },
+  { icon: Brain, number: '03', title: 'Context, not just charts', desc: 'AI reads the README and repository structure to explain what matters.' },
+];
 
 export default function HomePage() {
   const navigate = useNavigate();
@@ -9,99 +16,77 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const animation = anime.timeline({ easing: 'easeOutExpo' });
+    animation
+      .add({ targets: '.hero-eyebrow', opacity: [0, 1], translateY: [12, 0], duration: 550 })
+      .add({ targets: '.hero-title .word', opacity: [0, 1], translateY: [28, 0], delay: anime.stagger(85), duration: 750 }, '-=320')
+      .add({ targets: '.hero-copy, .search-card, .hero-meta', opacity: [0, 1], translateY: [18, 0], delay: anime.stagger(100), duration: 650 }, '-=520')
+      .add({ targets: '.preview-card', opacity: [0, 1], translateY: [24, 0], scale: [0.98, 1], duration: 850 }, '-=480')
+      .add({ targets: '.feature-card', opacity: [0, 1], translateY: [18, 0], delay: anime.stagger(90), duration: 600 }, '-=600');
+    anime({ targets: '.pulse-wave', strokeDashoffset: [anime.setDashoffset, 0], duration: 1800, easing: 'easeInOutSine', direction: 'alternate', loop: true });
+    return () => { animation.pause(); anime.remove('.pulse-wave'); };
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-
-    const parts = input.trim().split('/');
-    if (parts.length !== 2 || !parts[0] || !parts[1]) {
-      setError('Please enter in format: owner/repo');
+    const parts = input.trim().replace(/^https?:\/\/(www\.)?github\.com\//, '').replace(/\/$/, '').split('/');
+    if (parts.length !== 2 || !parts[0] || !parts[1] || parts.some((part) => !/^[\w.-]+$/.test(part))) {
+      setError('Enter a GitHub repository as owner/repo.');
       return;
     }
-
     setLoading(true);
     try {
       const result = await analyzeRepo(parts[0], parts[1]);
       navigate(`/analysis/${result.analysis_id}`);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to start analysis');
+      setError(err.response?.data?.error || 'Could not start analysis. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[70vh]">
-      {/* Hero */}
-      <div className="text-center mb-12">
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass-sm text-xs text-slate-500 mb-6 font-medium">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse-soft" />
-          Powered by Gemini AI
-        </div>
-        <h2 className="text-5xl font-bold text-gradient mb-4 leading-tight">
-          Analyze Any Repository
-        </h2>
-        <p className="text-slate-400 text-lg max-w-md mx-auto font-light leading-relaxed">
-          Deep code metrics, contributor analytics, and AI-powered insights
-          for any public GitHub repo.
-        </p>
-      </div>
+    <div className="home-page">
+      <section className="hero-grid">
+        <div className="hero-content">
+          <div className="hero-eyebrow"><span className="eyebrow-line" /> OPEN-SOURCE INTELLIGENCE <span className="eyebrow-dot">✳</span></div>
+          <h1 className="hero-title"><span className="word">See the work.</span><br /><span className="word title-accent">Understand</span><br /><span className="word">the why.</span></h1>
+          <p className="hero-copy">A living pulse check for any GitHub project. Explore the code, people, and momentum behind the repositories shaping the future.</p>
 
-      {/* Search */}
-      <form onSubmit={handleSubmit} className="w-full max-w-xl mb-16">
-        <div className="glass p-2 flex gap-2 glow-purple">
-          <div className="relative flex-1">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="owner/repo"
-              className="w-full pl-11 pr-4 py-3 bg-transparent text-slate-700 placeholder-slate-300
-                         focus:outline-none text-sm"
-              disabled={loading}
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="px-6 py-3 bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600
-                       text-white text-sm font-medium rounded-[14px] transition-all 
-                       disabled:opacity-40 disabled:cursor-not-allowed
-                       flex items-center gap-2 shadow-lg shadow-indigo-500/20"
-          >
-            {loading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <>
-                Analyze
-                <ArrowRight className="w-3.5 h-3.5" />
-              </>
-            )}
-          </button>
+          <form onSubmit={handleSubmit} className="search-card">
+            <div className="search-label"><span>START WITH A REPOSITORY</span><span className="keyboard-hint"><Command size={11} /> ENTER</span></div>
+            <div className="search-row">
+              <Search className="search-icon" size={19} />
+              <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="owner / repository" aria-label="GitHub repository" disabled={loading} />
+              <button type="submit" disabled={loading} aria-label="Analyze repository">{loading ? <Loader2 size={19} className="spin" /> : <ArrowUpRight size={20} />}</button>
+            </div>
+            {error && <p className="form-error" role="alert">{error}</p>}
+            <div className="search-foot"><span><i /> PUBLIC REPOSITORIES</span><span>Try <button type="button" onClick={() => setInput('vercel/next.js')}>vercel/next.js</button></span></div>
+          </form>
+          <div className="hero-meta"><span><ShieldCheck size={14} /> Read-only analysis</span><span className="meta-separator" /><span><Sparkles size={14} /> AI-assisted insights</span></div>
         </div>
-        {error && (
-          <p className="mt-3 text-red-500/80 text-xs text-center">{error}</p>
-        )}
-      </form>
 
-      {/* Feature cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full max-w-2xl">
-        {[
-          { icon: BarChart3, title: 'Code Metrics', desc: 'Commit frequency, churn, bus factor', color: 'text-indigo-500' },
-          { icon: GitFork, title: 'Visualizations', desc: 'Charts, timelines, rankings', color: 'text-violet-500' },
-          { icon: Brain, title: 'AI Insights', desc: 'Summary, architecture & tech stack', color: 'text-emerald-500' },
-        ].map((card) => (
-          <div
-            key={card.title}
-            className="glass-sm glass-hover p-6 text-center"
-          >
-            <card.icon className={`w-5 h-5 ${card.color} mx-auto mb-3 opacity-70`} />
-            <h3 className="text-slate-700 text-sm font-semibold mb-1">{card.title}</h3>
-            <p className="text-slate-400 text-xs">{card.desc}</p>
+        <div className="preview-wrap" aria-label="Preview of RepoPulse analytics dashboard">
+          <div className="preview-orbit orbit-one" /><div className="preview-orbit orbit-two" />
+          <div className="preview-card">
+            <div className="preview-top"><div className="window-dots"><i /><i /><i /></div><span className="preview-label"><Activity size={12} /> LIVE REPOSITORY SIGNAL</span><span className="preview-menu">···</span></div>
+            <div className="repo-heading"><div className="repo-avatar">N</div><div><p className="repo-name">northstar / orbit-ui</p><p className="repo-description">A design system for teams that move fast.</p></div><span className="repo-visibility">PUBLIC</span></div>
+            <div className="preview-score-row"><div><span className="tiny-label">PROJECT HEALTH</span><div className="score-wrap"><strong>86</strong><span>/ 100</span><b>↗ 8.4%</b></div></div><div className="score-ring"><svg viewBox="0 0 100 100"><circle className="ring-track" cx="50" cy="50" r="42" /><circle className="ring-value" cx="50" cy="50" r="42" /></svg><span>86</span></div></div>
+            <div className="preview-chart-head"><span>Contribution activity</span><span>LAST 30 DAYS <span className="chart-caret">⌄</span></span></div>
+            <div className="chart-area"><div className="chart-guides"><i /><i /><i /></div><svg className="activity-chart" viewBox="0 0 470 118" preserveAspectRatio="none"><defs><linearGradient id="chartFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#cbff60" stopOpacity=".2" /><stop offset="100%" stopColor="#cbff60" stopOpacity="0" /></linearGradient></defs><path d="M0 101 C18 95 23 80 39 87 S61 104 76 81 S99 73 111 83 S133 50 151 59 S177 76 188 51 S211 43 228 59 S251 72 263 42 S282 20 297 39 S314 57 329 34 S348 51 364 26 S383 35 398 21 S418 32 432 12 S455 23 470 5 V118 H0Z" fill="url(#chartFill)"/><path className="pulse-wave" d="M0 101 C18 95 23 80 39 87 S61 104 76 81 S99 73 111 83 S133 50 151 59 S177 76 188 51 S211 43 228 59 S251 72 263 42 S282 20 297 39 S314 57 329 34 S348 51 364 26 S383 35 398 21 S418 32 432 12 S455 23 470 5" fill="none" stroke="#caff57" strokeWidth="2.5" strokeLinecap="round" /></svg><div className="chart-axis"><span>JUN 01</span><span>JUN 08</span><span>JUN 15</span><span>JUN 22</span><span>JUN 30</span></div></div>
+            <div className="preview-stats"><div><span>COMMITS</span><strong>1,284</strong><small>+12.8% <i>↗</i></small></div><div><span>CONTRIBUTORS</span><strong>24</strong><small>4 active today</small></div><div><span>BUS FACTOR</span><strong>4 <em>GOOD</em></strong><small>Healthy distribution</small></div></div>
+            <div className="preview-languages"><span>TOP LANGUAGES</span><div className="language-bar"><i /><i /><i /><i /><i /></div><div className="language-legend"><span><i className="lang-js" /> TypeScript <b>48%</b></span><span><i className="lang-rs" /> Rust <b>26%</b></span><span><i className="lang-go" /> Go <b>16%</b></span></div></div>
+            <div className="preview-bottom"><span><i /> ANALYSIS UPDATED 2 MIN AGO</span><span>VIEW FULL REPORT <ArrowUpRight size={11} /></span></div>
           </div>
-        ))}
-      </div>
+          <div className="floating-note"><span className="note-icon"><GitCommitHorizontal size={15} /></span><span><b>Healthy momentum</b><small>Commit frequency is up 12.8%</small></span><span className="note-spark">↗</span></div>
+        </div>
+      </section>
+
+      <section className="feature-section"><div className="section-kicker"><span>WHAT YOU GET</span><span>01 — 03</span></div><div className="features-grid">{features.map((feature) => <article className="feature-card" key={feature.number}><div className="feature-top"><feature.icon size={18} /><span>{feature.number}</span></div><h2>{feature.title}</h2><p>{feature.desc}</p><div className="feature-rule" /></article>)}</div></section>
+      <section className="closing-note"><span className="closing-star">✳</span><p>Good software leaves a trail.<br /><span>Let’s read it together.</span></p><span className="closing-caption">BUILT FOR THE CURIOUS</span></section>
     </div>
   );
 }
