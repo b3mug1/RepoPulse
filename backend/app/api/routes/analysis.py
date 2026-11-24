@@ -7,8 +7,11 @@ All routes are prefixed with /api/v1 in the main app.
 from __future__ import annotations
 
 import uuid
+import csv
+from io import StringIO
 
 from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import Response
 
 from app.api.dependencies import (
     get_analysis_detail_use_case,
@@ -85,7 +88,7 @@ async def get_analysis(
 
     # Compute daily commit counts from stored commit timestamps
     date_counts = Counter(
-        c.committed_at.strftime("%m.%d") for c in commits if c.committed_at
+        c.committed_at.date().isoformat() for c in commits if c.committed_at
     )
     commits_per_date = sorted(
         [DailyCommit(date=d, commits=n) for d, n in date_counts.items()],
@@ -96,6 +99,13 @@ async def get_analysis(
         id=analysis.id,
         repository_id=analysis.repository_id,
         status=analysis.status.value if hasattr(analysis.status, "value") else analysis.status,
+        progress_stage=analysis.progress_stage,
+        health={
+            "score": analysis.health_score,
+            "grade": "Excellent" if analysis.health_score >= 80 else "Healthy" if analysis.health_score >= 60 else "Needs attention" if analysis.health_score >= 40 else "At risk",
+            "breakdown": analysis.health_breakdown,
+            "findings": analysis.health_findings,
+        },
         error_message=analysis.error_message,
         metrics=MetricsOut(
             total_commits=analysis.total_commits,
@@ -153,8 +163,38 @@ async def list_analyses(
             status=a.status.value if hasattr(a.status, "value") else a.status,
             total_commits=a.total_commits,
             bus_factor=a.bus_factor,
+            health_score=a.health_score,
             created_at=a.created_at,
             completed_at=a.completed_at,
         )
         for a in analyses
     ]
+
+
+@router.get("/{analysis_id}/export.csv", response_class=Response, summary="Export analysis as CSV")
+async def export_analysis_csv(
+    analysis_id: uuid.UUID,
+    use_case: GetAnalysisUseCase = Depends(get_analysis_detail_use_case),
+) -> Response:
+    data = await use_case.execute(analysis_id)
+    analysis = data["analysis"]
+    output = StringIO(newline="")
+    writer = csv.writer(output)
+    writer.writerow(["section", "name", "value"])
+    for name in (
+        "health_score", "total_commits", "avg_commit_size", "commits_per_day",
+        "commits_per_month", "code_churn_additions", "code_churn_deletions",
+        "avg_time_between_commits_hours", "bus_factor",
+    ):
+        writer.writerow(["metrics", name, getattr(analysis, name)])
+    for name, value in analysis.health_breakdown.items():
+        writer.writerow(["health_breakdown", name, value])
+    for contributor in data["contributors"]:
+        writer.writerow(["contributor", contributor.username, contributor.total_commits])
+    for finding in analysis.health_findings:
+        writer.writerow(["finding", finding.get("title", ""), finding.get("detail", "")])
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="repository-analysis-{analysis_id}.csv"'},
+    )

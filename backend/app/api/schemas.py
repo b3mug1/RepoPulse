@@ -84,6 +84,19 @@ class MetricsOut(BaseModel):
     commits_per_date: list[DailyCommit]
 
 
+class HealthFinding(BaseModel):
+    severity: str
+    title: str
+    detail: str
+
+
+class HealthOut(BaseModel):
+    score: int
+    grade: str
+    breakdown: dict[str, int]
+    findings: list[HealthFinding]
+
+
 class AIInsightsOut(BaseModel):
     ai_summary: Optional[str]
     readme_quality_score: Optional[float]
@@ -96,6 +109,8 @@ class AnalysisDetailOut(BaseModel):
     id: uuid.UUID
     repository_id: uuid.UUID
     status: str
+    progress_stage: str
+    health: HealthOut
     error_message: Optional[str]
     metrics: MetricsOut
     ai_insights: AIInsightsOut
@@ -110,6 +125,7 @@ class AnalysisListItem(BaseModel):
     status: str
     total_commits: int
     bus_factor: int
+    health_score: int
     created_at: datetime
     completed_at: Optional[datetime]
 
