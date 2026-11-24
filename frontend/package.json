@@ -1,5 +1,5 @@
 {
-  "name": "github-repo-analyzer-frontend",
+  "name": "repopulse-frontend",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -10,6 +10,7 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
   },
   "dependencies": {
+    "animejs": "^3.2.2",
     "axios": "^1.6.0",
     "lucide-react": "^0.300.0",
     "react": "^18.2.0",
@@ -20,6 +21,7 @@
     "recharts": "^2.10.0"
   },
   "devDependencies": {
+    "@types/animejs": "^3.1.13",
     "@types/node": "^25.3.0",
     "@types/react": "^18.2.0",
     "@types/react-calendar-heatmap": "^1.6.0",
