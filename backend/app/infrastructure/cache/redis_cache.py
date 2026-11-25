@@ -21,6 +21,7 @@ from redis.exceptions import RedisError
 import structlog
 
 from app.core.config import get_settings
+from app.core.metrics import metrics
 
 logger = structlog.get_logger(__name__)
 
@@ -44,7 +45,9 @@ class RedisCache:
             logger.warning("Redis cache unavailable", operation="get", error=str(exc))
             return None
         if raw is None:
+            metrics.record_cache_miss()
             return None
+        metrics.record_cache_hit()
         try:
             return json.loads(raw)
         except json.JSONDecodeError:

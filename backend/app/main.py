@@ -33,15 +33,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 def create_app() -> FastAPI:
     settings = get_settings()
 
+    expose_docs = settings.app_env != "production" or settings.app_debug
     app = FastAPI(
-        title="GitHub Repository Analyzer",
+        title="RepoPulse API",
         description=(
             "Analyse any public GitHub repository: code metrics, contributor stats, "
-            "language distribution, and AI-powered insights via Gemini."
+            "language distribution, and AI-powered insights."
         ),
         version="1.0.0",
-        docs_url="/docs",
-        redoc_url="/redoc",
+        docs_url="/docs" if expose_docs else None,
+        redoc_url="/redoc" if expose_docs else None,
+        openapi_url="/openapi.json" if expose_docs else None,
         lifespan=lifespan,
     )
 
