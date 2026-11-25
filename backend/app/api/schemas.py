@@ -76,6 +76,7 @@ class MetricsOut(BaseModel):
     total_commits: int
     avg_commit_size: float
     commits_per_day: float
+    commits_per_month: float
     code_churn_additions: int
     code_churn_deletions: int
     avg_time_between_commits_hours: float
@@ -90,10 +91,22 @@ class HealthFinding(BaseModel):
     detail: str
 
 
+class HealthComponent(BaseModel):
+    label: str
+    score: Optional[int]
+    weight: int
+    weighted_points: Optional[float]
+    status: str
+    explanation: str
+    evidence: str
+
+
 class HealthOut(BaseModel):
-    score: int
+    score: Optional[int]
+    coverage: int
     grade: str
-    breakdown: dict[str, int]
+    formula_version: str
+    breakdown: dict[str, HealthComponent]
     findings: list[HealthFinding]
 
 
@@ -125,7 +138,8 @@ class AnalysisListItem(BaseModel):
     status: str
     total_commits: int
     bus_factor: int
-    health_score: int
+    health_score: Optional[int]
+    health_coverage: int
     created_at: datetime
     completed_at: Optional[datetime]
 

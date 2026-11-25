@@ -1,15 +1,17 @@
 """
-Gemini AI client for repository analysis.
+AI client for repository analysis.
 
-Uses google-generativeai SDK to interact with Gemini Pro.
-All prompts are centralised here for easy tuning.
+Supports:
+1. Token Harbor (OpenAI-compatible API) with models like GLM 5.3 Flash
+2. Google Gemini SDK with models like Gemini 1.5 Flash
 """
 
 from __future__ import annotations
 
+import json
 from typing import Optional
 
-import google.generativeai as genai
+import httpx
 import structlog
 
 from app.core.config import get_settings
@@ -18,18 +20,31 @@ from app.core.exceptions import ExternalServiceError
 logger = structlog.get_logger(__name__)
 
 
-class GeminiClient:
+class AIClient:
     def __init__(self) -> None:
         settings = get_settings()
-        if not settings.gemini_api_key:
-            logger.warning("Gemini API key not configured — AI features disabled")
+        self._tokenharbor_key = settings.tokenharbor_api_key
+        self._tokenharbor_base_url = settings.tokenharbor_base_url.rstrip("/")
+        self._tokenharbor_model = settings.tokenharbor_model or "glm-5.3-flash"
+
+        self._gemini_key = settings.gemini_api_key
+        self._gemini_model = settings.gemini_model or "gemini-1.5-flash"
+
+        if self._tokenharbor_key:
+            self._provider = "tokenharbor"
+            self._enabled = True
+            logger.info("AI client initialized with Token Harbor", model=self._tokenharbor_model)
+        elif self._gemini_key:
+            import google.generativeai as genai
+            self._provider = "gemini"
+            genai.configure(api_key=self._gemini_key)
+            self._model = genai.GenerativeModel(self._gemini_model)
+            self._enabled = True
+            logger.info("AI client initialized with Gemini", model=self._gemini_model)
+        else:
+            logger.warning("No AI API key configured (Token Harbor or Gemini) — AI features disabled")
+            self._provider = None
             self._enabled = False
-            return
-        genai.configure(api_key=settings.gemini_api_key)
-        model_name = settings.gemini_model or 'gemini-1.5-flash'
-        self._model = genai.GenerativeModel(model_name)
-        self._enabled = True
-        logger.info("Gemini client initialized", model=model_name)
 
     # ── Public API ───────────────────────────────────────────────────────
 
@@ -43,7 +58,6 @@ class GeminiClient:
     ) -> dict:
         """
         Single consolidated API call that returns all AI insights at once.
-        This uses 1 API call instead of 4, critical for staying within free-tier quota.
         """
         file_tree_sample = "\n".join(file_paths[:150])
         readme_excerpt = (readme or "N/A")[:3000]
@@ -72,13 +86,39 @@ class GeminiClient:
 
     async def _generate(self, prompt: str) -> str:
         if not self._enabled:
-            return "AI analysis unavailable — Gemini API key not configured."
-        try:
-            response = await self._model.generate_content_async(prompt)
-            return response.text or ""
-        except Exception as exc:
-            logger.error("Gemini API error", error=str(exc))
-            raise ExternalServiceError("Gemini", str(exc)) from exc
+            return "AI analysis unavailable — no API key configured."
+
+        if self._provider == "tokenharbor":
+            try:
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    response = await client.post(
+                        f"{self._tokenharbor_base_url}/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {self._tokenharbor_key}",
+                            "Content-Type": "application/json",
+                        },
+                        json={
+                            "model": self._tokenharbor_model,
+                            "messages": [{"role": "user", "content": prompt}],
+                            "temperature": 0.2,
+                        },
+                    )
+                    response.raise_for_status()
+                    data = response.json()
+                    return data["choices"][0]["message"]["content"] or ""
+            except Exception as exc:
+                logger.error("Token Harbor API error", error=str(exc))
+                raise ExternalServiceError("TokenHarbor", str(exc)) from exc
+
+        if self._provider == "gemini":
+            try:
+                response = await self._model.generate_content_async(prompt)
+                return response.text or ""
+            except Exception as exc:
+                logger.error("Gemini API error", error=str(exc))
+                raise ExternalServiceError("Gemini", str(exc)) from exc
+
+        return ""
 
     @staticmethod
     def _strip_fences(raw: str) -> str:
@@ -93,7 +133,6 @@ class GeminiClient:
     @classmethod
     def _parse_combined_result(cls, raw: str) -> dict:
         """Parse the single combined JSON response into all AI insight fields."""
-        import json
         defaults = {
             "ai_summary": None,
             "readme_quality_score": None,
@@ -112,6 +151,9 @@ class GeminiClient:
                 "architecture_analysis": data.get("architecture_analysis") or None,
             }
         except (json.JSONDecodeError, ValueError, KeyError) as exc:
-            logger.warning("Failed to parse combined Gemini response", error=str(exc), raw=raw[:500])
-            # Fallback: use the raw text as summary
+            logger.warning("Failed to parse AI JSON response", error=str(exc), raw=raw[:500])
             return {**defaults, "ai_summary": raw[:2000] if raw else None}
+
+
+# Backward-compatible alias
+GeminiClient = AIClient

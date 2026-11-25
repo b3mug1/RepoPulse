@@ -122,7 +122,7 @@ class GitHubClient:
         except ExternalServiceError:
             return None
 
-    async def get_repo_tree(self, owner: str, name: str, branch: str = "HEAD") -> list[str]:
+    async def get_repo_tree(self, owner: str, name: str, branch: str = "HEAD") -> list[str] | None:
         """Return list of file paths (flat) from the repo tree."""
         try:
             resp = await self._get(
@@ -132,7 +132,8 @@ class GitHubClient:
             tree = resp.json().get("tree", [])
             return [item["path"] for item in tree if item["type"] == "blob"]
         except ExternalServiceError:
-            return []
+            # None means unavailable; [] means a successfully inspected empty tree.
+            return None
 
     # ── Helpers ──────────────────────────────────────────────────────────
 

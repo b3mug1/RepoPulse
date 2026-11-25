@@ -132,7 +132,7 @@ class CachedGitHubClient:
             await self._cache.set("github", cache_key, data, ttl_seconds=3600)
         return data
 
-    async def get_repo_tree(self, owner: str, name: str, branch: str = "HEAD") -> list[str]:
+    async def get_repo_tree(self, owner: str, name: str, branch: str = "HEAD") -> list[str] | None:
         cache_key = f"tree:{owner}/{name}:{branch}"
         cached = await self._cache.get("github", cache_key)
         if cached:

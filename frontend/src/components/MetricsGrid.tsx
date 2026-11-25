@@ -26,6 +26,12 @@ export default function MetricsGrid({ metrics }: Props) {
       color: 'text-violet-500',
     },
     {
+      label: 'Commits / 30 Days',
+      value: metrics.commits_per_month.toFixed(1),
+      icon: TrendingUp,
+      color: 'text-cyan-500',
+    },
+    {
       label: 'Avg Between Commits',
       value: `${metrics.avg_time_between_commits_hours.toFixed(1)} hrs`,
       icon: Clock,

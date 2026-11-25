@@ -35,6 +35,7 @@ export interface Metrics {
   total_commits: number;
   avg_commit_size: number;
   commits_per_day: number;
+  commits_per_month: number;
   code_churn_additions: number;
   code_churn_deletions: number;
   avg_time_between_commits_hours: number;
@@ -57,9 +58,19 @@ export interface AnalysisDetail {
   status: string;
   progress_stage: string;
   health: {
-    score: number;
+    score: number | null;
+    coverage: number;
     grade: string;
-    breakdown: Record<string, number>;
+    formula_version: string;
+    breakdown: Record<string, {
+      label: string;
+      score: number | null;
+      weight: number;
+      weighted_points: number | null;
+      status: string;
+      explanation: string;
+      evidence: string;
+    }>;
     findings: { severity: string; title: string; detail: string }[];
   };
   error_message: string | null;
@@ -76,7 +87,8 @@ export interface AnalysisHistoryItem {
   status: string;
   total_commits: number;
   bus_factor: number;
-  health_score: number;
+  health_score: number | null;
+  health_coverage: number;
   created_at: string;
   completed_at: string | null;
 }

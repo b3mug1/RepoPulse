@@ -10,8 +10,8 @@ build/
 .ruff_cache/
 
 # Environment
-.env.example
-.env
+.env*
+!.env.example
 .venv/
 venv/
 env/

@@ -6,7 +6,7 @@ directly verify the core business rules.
 """
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -19,6 +19,7 @@ from app.domain.services import (
     compute_code_churn,
     compute_commits_per_day,
     compute_commits_per_month,
+    calculate_repository_health,
 )
 
 
@@ -156,6 +157,64 @@ class TestCommitsPerDay:
         ]
         cpm = compute_commits_per_month(commits)
         assert abs(cpm - 2.0) < 0.01
+
+    def test_per_month_uses_elapsed_window_not_calendar_month_count(self):
+        commits = [
+            _make_commit(committed_at=datetime(2025, 1, 31)),
+            _make_commit(committed_at=datetime(2025, 2, 1)),
+        ]
+        assert compute_commits_per_month(commits) == 2.0
+
+
+class TestRepositoryHealth:
+    def test_missing_signals_are_unknown_and_score_is_normalized(self):
+        score, components, findings, coverage = calculate_repository_health(
+            commits_per_month=10,
+            sampled_commit_count=10,
+            bus_factor=2,
+            contributor_count=4,
+            readme_score=None,
+            file_paths=None,
+            latest_commit_at=datetime(2025, 6, 20, tzinfo=timezone.utc),
+            now=datetime(2025, 6, 21, tzinfo=timezone.utc),
+        )
+        assert score is not None
+        assert coverage == 45  # activity 25 + collaboration 20
+        assert components["documentation"]["score"] is None
+        assert components["testing"]["status"] == "unknown"
+        assert components["automation"]["score"] is None
+        assert any("concentrated" in item["title"].lower() for item in findings)
+
+    def test_no_measurable_signals_has_no_numeric_score(self):
+        score, components, _findings, coverage = calculate_repository_health(
+            commits_per_month=0,
+            sampled_commit_count=0,
+            bus_factor=0,
+            contributor_count=0,
+            readme_score=None,
+            file_paths=None,
+            latest_commit_at=None,
+        )
+        assert score is None
+        assert coverage == 0
+        assert all(component["score"] is None for component in components.values())
+
+    def test_test_paths_and_ci_providers_are_detected(self):
+        score, components, _findings, coverage = calculate_repository_health(
+            commits_per_month=5,
+            sampled_commit_count=4,
+            bus_factor=3,
+            contributor_count=5,
+            readme_score=8,
+            file_paths=["src/app.ts", "backend/tests/test_api.py", ".gitlab-ci.yml"],
+            latest_commit_at=datetime(2025, 6, 20, tzinfo=timezone.utc),
+            now=datetime(2025, 6, 21, tzinfo=timezone.utc),
+        )
+        assert score is not None
+        assert coverage == 100
+        assert components["testing"]["score"] == 100
+        assert components["automation"]["score"] == 100
+        assert "test_api.py" in components["testing"]["evidence"]
 
 
 # ── Aggregate Contributors ──────────────────────────────────────────────────

@@ -101,8 +101,10 @@ async def get_analysis(
         status=analysis.status.value if hasattr(analysis.status, "value") else analysis.status,
         progress_stage=analysis.progress_stage,
         health={
-            "score": analysis.health_score,
-            "grade": "Excellent" if analysis.health_score >= 80 else "Healthy" if analysis.health_score >= 60 else "Needs attention" if analysis.health_score >= 40 else "At risk",
+            "score": analysis.health_score if analysis.health_coverage else None,
+            "coverage": analysis.health_coverage,
+            "grade": "Insufficient data" if not analysis.health_coverage else "Excellent" if analysis.health_score >= 80 else "Healthy" if analysis.health_score >= 60 else "Needs attention" if analysis.health_score >= 40 else "At risk",
+            "formula_version": "1.0",
             "breakdown": analysis.health_breakdown,
             "findings": analysis.health_findings,
         },
@@ -111,6 +113,7 @@ async def get_analysis(
             total_commits=analysis.total_commits,
             avg_commit_size=analysis.avg_commit_size,
             commits_per_day=analysis.commits_per_day,
+            commits_per_month=analysis.commits_per_month,
             code_churn_additions=analysis.code_churn_additions,
             code_churn_deletions=analysis.code_churn_deletions,
             avg_time_between_commits_hours=analysis.avg_time_between_commits_hours,
@@ -163,7 +166,8 @@ async def list_analyses(
             status=a.status.value if hasattr(a.status, "value") else a.status,
             total_commits=a.total_commits,
             bus_factor=a.bus_factor,
-            health_score=a.health_score,
+            health_score=a.health_score if a.health_coverage else None,
+            health_coverage=a.health_coverage,
             created_at=a.created_at,
             completed_at=a.completed_at,
         )
@@ -187,8 +191,12 @@ async def export_analysis_csv(
         "avg_time_between_commits_hours", "bus_factor",
     ):
         writer.writerow(["metrics", name, getattr(analysis, name)])
+    writer.writerow(["health", "coverage_percent", analysis.health_coverage])
+    writer.writerow(["health", "formula_version", "1.0"])
     for name, value in analysis.health_breakdown.items():
-        writer.writerow(["health_breakdown", name, value])
+        writer.writerow(["health_breakdown", name, value.get("score") if isinstance(value, dict) else value])
+        if isinstance(value, dict):
+            writer.writerow(["health_evidence", name, value.get("evidence", "")])
     for contributor in data["contributors"]:
         writer.writerow(["contributor", contributor.username, contributor.total_commits])
     for finding in analysis.health_findings:

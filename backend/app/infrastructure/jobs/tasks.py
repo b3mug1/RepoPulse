@@ -150,8 +150,9 @@ async def _analyze(analysis_id: str, owner: str, name: str, session: Session) ->
         "language_distribution": language_distribution,
     }
     latest_commit_at = max((item.committed_at for item in commit_entities), default=None)
-    health_score, health_breakdown, health_findings = calculate_repository_health(
+    health_score, health_breakdown, health_findings, health_coverage = calculate_repository_health(
         commits_per_month=metrics["commits_per_month"],
+        sampled_commit_count=len(commit_entities),
         bus_factor=metrics["bus_factor"],
         contributor_count=len(contributors),
         readme_score=None,
@@ -170,10 +171,11 @@ async def _analyze(analysis_id: str, owner: str, name: str, session: Session) ->
     _set_progress(session, analysis_id, "Generating AI insights")
     try:
         ai_results = await gemini.analyze_repository(
-            f"{owner}/{name}", None, language_distribution, file_paths, readme
+            f"{owner}/{name}", None, language_distribution, file_paths or [], readme
         )
-        health_score, health_breakdown, health_findings = calculate_repository_health(
+        health_score, health_breakdown, health_findings, health_coverage = calculate_repository_health(
             commits_per_month=metrics["commits_per_month"],
+            sampled_commit_count=len(commit_entities),
             bus_factor=metrics["bus_factor"],
             contributor_count=len(contributors),
             readme_score=ai_results.get("readme_quality_score"),
@@ -189,6 +191,7 @@ async def _analyze(analysis_id: str, owner: str, name: str, session: Session) ->
         **metrics,
         **ai_results,
         "health_score": health_score,
+        "health_coverage": health_coverage,
         "health_breakdown": health_breakdown,
         "health_findings": health_findings,
         "commit_entities": commit_entities,
@@ -240,6 +243,7 @@ def _save_results(session: Session, analysis_id: str, result: dict) -> None:
     analysis.bus_factor = result["bus_factor"]
     analysis.language_distribution = result["language_distribution"]
     analysis.health_score = result["health_score"]
+    analysis.health_coverage = result["health_coverage"]
     analysis.health_breakdown = result["health_breakdown"]
     analysis.health_findings = result["health_findings"]
 

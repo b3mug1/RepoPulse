@@ -14,13 +14,13 @@ interface Props {
 }
 
 export default function RepositoryHealthPanel({ health }: Props) {
-  const scoreColor = health.score >= 75 ? 'text-emerald-600' : health.score >= 50 ? 'text-amber-600' : 'text-rose-600';
+  const scoreColor = health.score === null ? 'text-slate-400' : health.score >= 75 ? 'text-emerald-600' : health.score >= 50 ? 'text-amber-600' : 'text-rose-600';
   return (
     <section className="glass p-6 md:p-8" aria-labelledby="health-title">
       <div className="flex flex-col md:flex-row md:items-start gap-7">
         <div className="flex items-center gap-4 md:w-64 shrink-0">
           <div className={`w-20 h-20 rounded-2xl glass-sm flex flex-col items-center justify-center ${scoreColor}`}>
-            <span className="text-3xl font-bold tabular-nums">{health.score}</span>
+            <span className="text-3xl font-bold tabular-nums">{health.score ?? '—'}</span>
             <span className="text-[10px] text-slate-400">/ 100</span>
           </div>
           <div>
@@ -28,19 +28,25 @@ export default function RepositoryHealthPanel({ health }: Props) {
               <ShieldCheck className="w-4 h-4 text-indigo-500" /> Repository health
             </h3>
             <p className={`text-sm font-medium mt-1 ${scoreColor}`}>{health.grade}</p>
-            <p className="text-[11px] text-slate-400 mt-1">Based on sampled GitHub signals</p>
+            <p className="text-[11px] text-slate-400 mt-1">{health.coverage}% of weighted signals measured</p>
           </div>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 flex-1">
-          {Object.entries(health.breakdown).map(([key, value]) => (
-            <div key={key} className="glass-sm p-3">
+          {Object.entries(health.breakdown).map(([key, component]) => (
+            <div key={key} className="glass-sm p-3" title={`${component.explanation} ${component.evidence}`}>
               <div className="flex justify-between items-center gap-2 mb-2">
-                <span className="text-[11px] text-slate-500">{labels[key] || key}</span>
-                <span className="text-xs font-semibold text-slate-700">{value}</span>
+                <span className="text-[11px] text-slate-500">{labels[key] || component.label || key}</span>
+                <span className="text-xs font-semibold text-slate-700">{component.score ?? '—'}</span>
               </div>
               <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-indigo-500 to-violet-500" style={{ width: `${value}%` }} />
+                {component.score !== null && <div className="h-full bg-gradient-to-r from-indigo-500 to-violet-500" style={{ width: `${component.score}%` }} />}
               </div>
+              <p className="text-[10px] text-slate-400 mt-2">Weight {component.weight}% · {component.status}</p>
+              <details className="mt-2 text-[10px] text-slate-400">
+                <summary className="cursor-pointer text-indigo-500">How this is measured</summary>
+                <p className="mt-2 leading-relaxed">{component.explanation}</p>
+                <p className="mt-1 leading-relaxed"><strong>Evidence:</strong> {component.evidence}</p>
+              </details>
             </div>
           ))}
         </div>
@@ -59,7 +65,7 @@ export default function RepositoryHealthPanel({ health }: Props) {
           })}
         </div>
       </div>
-      <p className="text-[10px] text-slate-400 mt-4">Heuristic score for portfolio review; it is not a security audit or a measure of developer performance.</p>
+      <p className="text-[10px] text-slate-400 mt-4">Score v{health.formula_version} is normalized over measured signals. Missing data is shown as “—”, not treated as a failing score. This is a heuristic snapshot, not a security audit or a measure of developer performance.</p>
     </section>
   );
 }

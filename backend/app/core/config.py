@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     def sync_database_url(self) -> str:
         """Used by Alembic and Celery (synchronous drivers)."""
         return (
-            f"postgresql://{self.postgres_user}:{self.postgres_password}"
+            f"postgresql+psycopg2://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 
@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     github_token: str = ""
     gemini_api_key: str = ""
     gemini_model: str = "gemini-1.5-flash"
+    tokenharbor_api_key: str = ""
+    tokenharbor_base_url: str = "https://tokenharbor.ai/v1"
+    tokenharbor_model: str = "glm-5.3-flash"
 
     rate_limit_per_minute: int = 30
 

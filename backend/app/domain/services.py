@@ -71,17 +71,17 @@ def compute_commits_per_day(commits: Sequence[CommitStats]) -> float:
     if not commits:
         return 0.0
     dates = [c.committed_at for c in commits]
-    span_days = max((max(dates) - min(dates)).days, 1)
+    span_days = max((max(dates) - min(dates)).total_seconds() / 86_400, 1)
     return round(len(commits) / span_days, 2)
 
 
 def compute_commits_per_month(commits: Sequence[CommitStats]) -> float:
-    """Average commits per 30-day period based on unique active months."""
-    if not commits:
+    """Estimate commits per 30 days across the sampled commit date range."""
+    if len(commits) < 2:
         return 0.0
-    months = {(c.committed_at.year, c.committed_at.month) for c in commits}
-    num_months = max(len(months), 1)
-    return round(len(commits) / num_months, 2)
+    dates = [c.committed_at for c in commits]
+    observed_days = (max(dates) - min(dates)).total_seconds() / 86_400
+    return round(len(commits) * 30 / max(observed_days, 30), 2)
 
 
 def aggregate_contributors(commits: Sequence[CommitStats], analysis_id) -> list[Contributor]:
@@ -129,44 +129,143 @@ def aggregate_contributors(commits: Sequence[CommitStats], analysis_id) -> list[
 def calculate_repository_health(
     *,
     commits_per_month: float,
+    sampled_commit_count: int,
     bus_factor: int,
     contributor_count: int,
     readme_score: float | None,
-    file_paths: Sequence[str],
+    file_paths: Sequence[str] | None,
     latest_commit_at: datetime | None,
     now: datetime | None = None,
-) -> tuple[int, dict[str, int], list[dict[str, str]]]:
-    """Calculate an explainable repository health score from observable signals."""
-    paths = {path.lower() for path in file_paths}
-    breakdown = {
-        "activity": min(100, round(max(commits_per_month, 0) / 20 * 100)),
-        "collaboration": min(100, (min(bus_factor, 5) * 15) + (15 if contributor_count > 1 else 0)),
-        "documentation": round(max(0, min(readme_score or 0, 10)) * 10),
-        "testing": 100 if any("test" in p or "spec" in p for p in paths) else 0,
-        "automation": 100 if any(p.startswith(".github/workflows/") for p in paths) else 0,
+) -> tuple[int | None, dict[str, dict], list[dict[str, str]], int]:
+    """Return a transparent score, component evidence, and actionable findings.
+
+    The score is normalized over available signals. Unknown signals do not count as
+    zero; coverage reports how much of the configured 100% weighting is measured.
+    """
+    weights = {
+        "activity": 25,
+        "collaboration": 20,
+        "documentation": 20,
+        "testing": 20,
+        "automation": 15,
     }
-    weights = {"activity": 25, "collaboration": 20, "documentation": 20, "testing": 20, "automation": 15}
-    score = round(sum(breakdown[key] * weight for key, weight in weights.items()) / 100)
+    paths = {path.replace("\\", "/").lower().lstrip("./") for path in file_paths or []}
+    components: dict[str, dict] = {}
+
+    def add_component(key: str, score: int | None, explanation: str, evidence: str) -> None:
+        weight = weights[key]
+        components[key] = {
+            "label": key.replace("_", " ").title(),
+            "score": score,
+            "weight": weight,
+            "weighted_points": round((score or 0) * weight / 100, 2) if score is not None else None,
+            "status": "measured" if score is not None else "unknown",
+            "explanation": explanation,
+            "evidence": evidence,
+        }
+
+    if sampled_commit_count >= 2 and latest_commit_at is not None:
+        volume_score = min(100, round(max(commits_per_month, 0) / 20 * 100))
+        reference = now or datetime.now(latest_commit_at.tzinfo)
+        if reference.tzinfo is None and latest_commit_at.tzinfo is not None:
+            reference = reference.replace(tzinfo=latest_commit_at.tzinfo)
+        elif reference.tzinfo is not None and latest_commit_at.tzinfo is None:
+            latest_commit_at = latest_commit_at.replace(tzinfo=reference.tzinfo)
+        age_days = max((reference - latest_commit_at).total_seconds() / 86_400, 0)
+        recency_score = (
+            100 if age_days <= 14 else
+            80 if age_days <= 30 else
+            60 if age_days <= 90 else
+            35 if age_days <= 180 else
+            10 if age_days <= 365 else 0
+        )
+        activity_score = round(volume_score * 0.7 + recency_score * 0.3)
+        add_component(
+            "activity",
+            activity_score,
+            "70% is the estimated commit rate (20 commits per 30 days maps to 100); 30% is recency. This is based only on the sampled commits.",
+            f"{sampled_commit_count} sampled commits; estimated {commits_per_month:.2f} commits per 30 days; latest sampled commit {age_days:.0f} days ago.",
+        )
+    else:
+        add_component("activity", None, "At least two dated commits are needed to estimate activity.", f"{sampled_commit_count} dated commits available.")
+
+    if contributor_count > 0 and bus_factor > 0:
+        collaboration_score = min(100, 20 + (min(bus_factor, 5) - 1) * 20)
+        add_component(
+            "collaboration",
+            collaboration_score,
+            "Based on the number of sampled contributors needed to account for 80% of commits; it does not measure individual performance.",
+            f"{contributor_count} sampled contributors; bus factor {bus_factor}.",
+        )
+    else:
+        add_component("collaboration", None, "No attributable commits were available to estimate contributor concentration.", "Contributor sample is empty.")
+
+    if readme_score is not None:
+        normalized_readme = max(0, min(float(readme_score), 10))
+        add_component("documentation", round(normalized_readme * 10), "README quality is an AI estimate on a 0–10 scale, converted to 0–100.", f"AI README score: {normalized_readme:.1f}/10.")
+    else:
+        add_component("documentation", None, "README quality was not measured; unavailable AI output is not treated as a zero score.", "No valid README quality score was returned.")
+
+    if file_paths is None:
+        add_component("testing", None, "Repository tree could not be inspected, so test-file presence is unknown.", "GitHub tree data unavailable.")
+        add_component("automation", None, "Repository tree could not be inspected, so CI configuration presence is unknown.", "GitHub tree data unavailable.")
+    else:
+        test_patterns = (
+            "/tests/", "/test/", "/spec/", "/specs/",
+        )
+        test_files = [
+            path for path in paths
+            if any(pattern in f"/{path}/" for pattern in test_patterns)
+            or path.endswith(("_test.py", ".test.ts", ".test.tsx", ".test.js", ".test.jsx", ".spec.ts", ".spec.tsx", ".spec.js", ".spec.jsx"))
+        ]
+        add_component(
+            "testing",
+            100 if test_files else 0,
+            "Looks for common test/spec directories and filename conventions; this does not verify that tests pass or provide coverage.",
+            f"Detected {len(test_files)} matching test paths among {len(paths)} tree paths." + (f" Examples: {', '.join(test_files[:3])}." if test_files else ""),
+        )
+
+        ci_patterns = (
+            ".github/workflows/", ".gitlab-ci.yml", ".circleci/config.yml",
+            "jenkinsfile", "azure-pipelines.yml", "buildkite.yml", ".buildkite/", "bitbucket-pipelines.yml",
+        )
+        ci_files = [path for path in paths if any(pattern in path for pattern in ci_patterns)]
+        add_component(
+            "automation",
+            100 if ci_files else 0,
+            "Looks for common CI configuration paths; presence does not mean workflows are enabled or passing.",
+            f"Detected {len(ci_files)} matching CI paths among {len(paths)} tree paths." + (f" Examples: {', '.join(ci_files[:3])}." if ci_files else ""),
+        )
+
+    available_weight = sum(item["weight"] for item in components.values() if item["score"] is not None)
+    score = (
+        round(sum(item["weighted_points"] or 0 for item in components.values()) * 100 / available_weight)
+        if available_weight else None
+    )
     findings: list[dict[str, str]] = []
 
     def add(severity: str, title: str, detail: str) -> None:
         findings.append({"severity": severity, "title": title, "detail": detail})
 
-    if bus_factor <= 1:
-        add("high", "Single contributor risk", "One contributor accounts for at least 80% of recorded commits.")
-    elif bus_factor <= 2:
-        add("medium", "Concentrated ownership", "A small number of contributors account for most recorded commits.")
-    if breakdown["documentation"] < 60:
-        add("medium", "Documentation could improve", "README quality signals are limited or unavailable.")
-    if breakdown["testing"] == 0:
-        add("medium", "No test files detected", "The sampled repository tree did not contain paths named test or spec.")
-    if breakdown["automation"] == 0:
-        add("low", "No GitHub Actions workflows detected", "No workflow files were found under .github/workflows.")
-    if latest_commit_at:
+    if contributor_count and bus_factor == 1:
+        add("high", "Concentrated commit ownership", "One sampled contributor accounts for at least 80% of sampled commits. This is a continuity signal, not a developer performance judgment.")
+    elif contributor_count and bus_factor == 2:
+        add("medium", "Ownership concentrated in two contributors", "Two sampled contributors account for at least 80% of sampled commits.")
+    testing = components["testing"]
+    if testing["score"] == 0:
+        add("medium", "No common test paths detected", testing["evidence"])
+    automation = components["automation"]
+    if automation["score"] == 0:
+        add("low", "No common CI configuration detected", automation["evidence"])
+    if latest_commit_at and sampled_commit_count >= 2:
         reference = now or datetime.now(latest_commit_at.tzinfo)
-        age_days = max((reference - latest_commit_at).days, 0)
-        if age_days > 365:
-            add("medium", "Repository may be inactive", f"The latest sampled commit is about {age_days} days old.")
+        if reference.tzinfo is None and latest_commit_at.tzinfo is not None:
+            reference = reference.replace(tzinfo=latest_commit_at.tzinfo)
+        elif reference.tzinfo is not None and latest_commit_at.tzinfo is None:
+            latest_commit_at = latest_commit_at.replace(tzinfo=reference.tzinfo)
+        age_days = max((reference - latest_commit_at).total_seconds() / 86_400, 0)
+        if age_days > 90:
+            add("medium", "Recent activity is limited", f"The latest sampled commit is {age_days:.0f} days old; project activity may happen outside the sampled window.")
     if not findings:
-        add("low", "No major signals found", "The available repository signals look balanced.")
-    return score, breakdown, findings
+        add("low", "No major issues detected in available signals", "This is a heuristic snapshot, not a full code, security, or quality audit.")
+    return score, components, findings, available_weight
