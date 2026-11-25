@@ -36,3 +36,13 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
     docker compose -f docker-compose.prod.yml exec -T postgres \
     psql -U "${POSTGRES_USER:-analyzer}" -d "${POSTGRES_DB:-github_analyzer}"
   ```
+
+## 6. Automatic AWS Deployment (CD)
+`.github/workflows/deploy.yml` automatically deploys `master` to AWS whenever the `CI` workflow succeeds (and can also be triggered manually via `workflow_dispatch`).
+
+Add these secrets in **GitHub → Settings → Secrets and variables → Actions**:
+- `AWS_HOST` — EC2 public IP or hostname
+- `AWS_USER` — SSH username (e.g. `ubuntu` or `ec2-user`)
+- `AWS_SSH_KEY` — Private SSH key matching the server's `authorized_keys`
+- `AWS_PROJECT_DIR` *(optional)* — Path to the cloned repo on the server (defaults to `~/RepoPulse` or `~/github_repo_analyzer`)
+
