@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import anime from 'animejs';
-import { analyzeRepo } from '../api/client';
-import { Search, Loader2, ArrowUpRight, BarChart3, Brain, GitFork, ShieldCheck, GitCommitHorizontal, Sparkles, Activity, Command } from 'lucide-react';
+import { analyzeRepo, getAllAnalysisHistory, getSavedRepos, GlobalHistoryItem } from '../api/client';
+import { Search, Loader2, ArrowUpRight, BarChart3, Brain, GitFork, ShieldCheck, GitCommitHorizontal, Sparkles, Activity, Command, Bookmark, Clock3 } from 'lucide-react';
 
 const features = [
   { icon: BarChart3, number: '01', title: 'Signal over noise', desc: 'A clear picture of velocity, code churn and the rhythm of a project.' },
@@ -15,6 +15,15 @@ export default function HomePage() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [savedRepos, setSavedRepos] = useState<string[]>([]);
+  const [recentAnalyses, setRecentAnalyses] = useState<GlobalHistoryItem[]>([]);
+
+  useEffect(() => {
+    setSavedRepos(getSavedRepos());
+    getAllAnalysisHistory({ limit: 4, sort_by: 'created_at', sort_order: 'desc' })
+      .then((res) => setRecentAnalyses(res.items))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
@@ -86,6 +95,42 @@ export default function HomePage() {
       </section>
 
       <section className="feature-section"><div className="section-kicker"><span>WHAT YOU GET</span><span>01 — 03</span></div><div className="features-grid">{features.map((feature) => <article className="feature-card" key={feature.number}><div className="feature-top"><feature.icon size={18} /><span>{feature.number}</span></div><h2>{feature.title}</h2><p>{feature.desc}</p><div className="feature-rule" /></article>)}</div></section>
+      {(savedRepos.length > 0 || recentAnalyses.length > 0) && (
+        <section className="feature-section grid grid-cols-1 md:grid-cols-2 gap-4">
+          {savedRepos.length > 0 && (
+            <div className="glass p-5">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">
+                <Bookmark size={14} /> Saved repositories
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {savedRepos.map((repo) => (
+                  <button key={repo} type="button" onClick={() => setInput(repo)} className="report-action">
+                    {repo}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {recentAnalyses.length > 0 && (
+            <div className="glass p-5">
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  <Clock3 size={14} /> Recent analyses
+                </span>
+                <Link to="/history" className="text-xs text-indigo-500">View all</Link>
+              </div>
+              <div className="space-y-2">
+                {recentAnalyses.map((item) => (
+                  <Link key={item.id} to={`/analysis/${item.id}`} className="flex items-center justify-between text-xs p-2 rounded-lg hover:bg-white/50">
+                    <span className="font-medium text-slate-700 truncate">{item.repository_full_name}</span>
+                    <span className="text-slate-400 shrink-0 ml-2">Health {item.health_score ?? '—'}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
       <section className="closing-note"><span className="closing-star">✳</span><p>Good software leaves a trail.<br /><span>Let’s read it together.</span></p><span className="closing-caption">BUILT FOR THE CURIOUS</span></section>
     </div>
   );

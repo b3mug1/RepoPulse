@@ -61,6 +61,7 @@ class Analysis:
     health_coverage: int = 0
     health_breakdown: dict[str, dict] = field(default_factory=dict)
     health_findings: list[dict[str, str]] = field(default_factory=list)
+    extended_signals: dict = field(default_factory=dict)
     progress_stage: str = "queued"
 
     ai_summary: Optional[str] = None

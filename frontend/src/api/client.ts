@@ -55,6 +55,9 @@ export interface AIInsights {
 export interface AnalysisDetail {
   id: string;
   repository_id: string;
+  repository_full_name: string;
+  repository_owner: string;
+  repository_name: string;
   status: string;
   progress_stage: string;
   health: {
@@ -103,6 +106,43 @@ export interface AnalysisHistoryItem {
   completed_at: string | null;
 }
 
+export interface GlobalHistoryItem extends AnalysisHistoryItem {
+  repository_id: string;
+  repository_full_name: string;
+  commits_per_month: number;
+}
+
+export interface AnalysisHistoryPage {
+  items: GlobalHistoryItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface AnalysisComparison {
+  left: AnalysisDetail;
+  right: AnalysisDetail;
+  deltas: {
+    health_score: number | null;
+    total_commits: number;
+    commits_per_month: number;
+    avg_commit_size: number;
+    bus_factor: number;
+    code_churn_additions: number;
+    code_churn_deletions: number;
+    avg_time_between_commits_hours: number;
+  };
+}
+
+export interface ShareLinkResult {
+  token: string;
+  analysis_id: string;
+  expires_at: string;
+  include_ai_insights: boolean;
+  include_contributors: boolean;
+  revoked: boolean;
+}
+
 // ── API Calls ────────────────────────────────────────────────────────────────
 
 export async function analyzeRepo(owner: string, name: string): Promise<AnalyzeResponse> {
@@ -112,6 +152,11 @@ export async function analyzeRepo(owner: string, name: string): Promise<AnalyzeR
 
 export async function getAnalysis(analysisId: string): Promise<AnalysisDetail> {
   const { data } = await api.get(`/analyses/${analysisId}`);
+  return data;
+}
+
+export async function getSharedAnalysis(token: string): Promise<AnalysisDetail> {
+  const { data } = await api.get(`/analyses/shared/${token}`);
   return data;
 }
 
@@ -128,6 +173,63 @@ export async function retryAnalysis(analysisId: string): Promise<AnalyzeResponse
 export async function getAnalysisHistory(repositoryId: string): Promise<AnalysisHistoryItem[]> {
   const { data } = await api.get('/analyses/', { params: { repository_id: repositoryId, limit: 10 } });
   return data;
+}
+
+export async function getAllAnalysisHistory(params: {
+  repository_id?: string;
+  status?: string;
+  search?: string;
+  sort_by?: 'created_at' | 'health_score' | 'total_commits';
+  sort_order?: 'asc' | 'desc';
+  limit?: number;
+  offset?: number;
+}): Promise<AnalysisHistoryPage> {
+  const { data } = await api.get('/analyses/history', { params });
+  return data;
+}
+
+export async function compareAnalyses(leftId: string, rightId: string): Promise<AnalysisComparison> {
+  const { data } = await api.get('/analyses/compare', { params: { left_id: leftId, right_id: rightId } });
+  return data;
+}
+
+export async function createShareLink(
+  analysisId: string,
+  payload: { expires_in_hours: number; include_ai_insights: boolean; include_contributors: boolean }
+): Promise<ShareLinkResult> {
+  const { data } = await api.post(`/analyses/${analysisId}/share`, payload);
+  return data;
+}
+
+// ── Saved Repositories (localStorage) ────────────────────────────────────────
+
+const SAVED_REPOS_KEY = 'repopulse_saved_repos';
+
+export function getSavedRepos(): string[] {
+  try {
+    const raw = localStorage.getItem(SAVED_REPOS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function isRepoSaved(fullName: string): boolean {
+  return getSavedRepos().includes(fullName);
+}
+
+export function toggleSavedRepo(fullName: string): string[] {
+  const current = getSavedRepos();
+  const next = current.includes(fullName)
+    ? current.filter((item) => item !== fullName)
+    : [fullName, ...current].slice(0, 20);
+  try {
+    localStorage.setItem(SAVED_REPOS_KEY, JSON.stringify(next));
+  } catch {
+    // ignore storage quota errors
+  }
+  return next;
 }
 
 export default api;

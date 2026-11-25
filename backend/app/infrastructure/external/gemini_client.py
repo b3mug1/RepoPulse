@@ -58,7 +58,11 @@ class AIClient:
     ) -> dict:
         """
         Single consolidated API call that returns all AI insights at once.
+        Falls back to deterministic demo heuristics when no AI API key is configured.
         """
+        if not self._enabled:
+            return self._demo_analysis(repo_name, description, languages, file_paths, readme)
+
         file_tree_sample = "\n".join(file_paths[:150])
         readme_excerpt = (readme or "N/A")[:3000]
 
@@ -119,6 +123,78 @@ class AIClient:
                 raise ExternalServiceError("Gemini", str(exc)) from exc
 
         return ""
+
+    @staticmethod
+    def _demo_analysis(
+        repo_name: str,
+        description: str | None,
+        languages: dict[str, float],
+        file_paths: list[str],
+        readme: str | None,
+    ) -> dict:
+        """Deterministic heuristic insights used when no Gemini/TokenHarbor key is set."""
+        normalized_paths = [p.replace("\\", "/").lower() for p in file_paths]
+        stack: list[str] = list(languages.keys())[:5]
+        indicators = {
+            "package.json": "Node.js",
+            "tsconfig.json": "TypeScript",
+            "pyproject.toml": "Python",
+            "requirements.txt": "Python",
+            "dockerfile": "Docker",
+            "docker-compose": "Docker Compose",
+            "cargo.toml": "Rust",
+            "go.mod": "Go",
+            "vite.config": "Vite",
+            "next.config": "Next.js",
+            "alembic": "Alembic",
+            "pytest": "pytest",
+        }
+        for marker, label in indicators.items():
+            if any(marker in p for p in normalized_paths) and label not in stack:
+                stack.append(label)
+
+        readme_text = (readme or "").strip()
+        readme_lower = readme_text.lower()
+        readme_score = 0.0
+        feedback_parts: list[str] = []
+        if readme_text:
+            readme_score += 3.0 if len(readme_text) >= 400 else 1.5
+            for section, pts, label in (
+                ("install", 2.0, "installation steps"),
+                ("usage", 2.0, "usage examples"),
+                ("license", 1.5, "license information"),
+                ("test", 1.5, "testing instructions"),
+            ):
+                if section in readme_lower:
+                    readme_score += pts
+                else:
+                    feedback_parts.append(f"consider adding {label}")
+        else:
+            feedback_parts.append("no README file detected")
+
+        top_langs = ", ".join(f"{k} ({v}%)" for k, v in list(languages.items())[:3]) or "unknown languages"
+        has_tests = any("/test" in p or ".test." in p or ".spec." in p for p in normalized_paths)
+        has_ci = any(".github/workflows/" in p or "gitlab-ci" in p for p in normalized_paths)
+
+        summary = (
+            f"[Demo mode — no AI key configured] {repo_name} is a repository primarily using {top_langs}. "
+            f"{description or 'No repository description provided.'}"
+        )
+        architecture = (
+            f"[Demo mode] Inspected {len(file_paths)} tree paths. "
+            f"{'Detected test directories/files. ' if has_tests else 'No standard test paths detected. '}"
+            f"{'Detected CI workflow configuration.' if has_ci else 'No standard CI configuration detected.'}"
+        )
+        feedback = (
+            "Demo heuristic check: " + ("; ".join(feedback_parts) if feedback_parts else "README covers core setup and usage sections.")
+        )
+        return {
+            "ai_summary": summary,
+            "readme_quality_score": round(min(readme_score, 10.0), 1),
+            "readme_quality_feedback": feedback,
+            "detected_tech_stack": stack[:10],
+            "architecture_analysis": architecture,
+        }
 
     @staticmethod
     def _strip_fences(raw: str) -> str:

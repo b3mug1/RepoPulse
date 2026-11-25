@@ -117,6 +117,7 @@ class AnalysisModel(Base):
     health_coverage: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     health_breakdown: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")
     health_findings: Mapped[list] = mapped_column(JSON, default=list, server_default="[]")
+    extended_signals: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")
     progress_stage: Mapped[str] = mapped_column(String(80), default="queued", server_default="queued")
 
     # AI Insights
@@ -187,3 +188,25 @@ class ContributorModel(Base):
     last_commit_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     analysis: Mapped["AnalysisModel"] = relationship(back_populates="contributors")
+
+
+# ── Share Links ──────────────────────────────────────────────────────────────
+
+
+class ShareLinkModel(Base):
+    __tablename__ = "share_links"
+    __table_args__ = (
+        Index("ix_share_links_token", "token", unique=True),
+        Index("ix_share_links_analysis", "analysis_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    analysis_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("analyses.id", ondelete="CASCADE"), nullable=False
+    )
+    token: Mapped[str] = mapped_column(String(64), nullable=False)
+    include_ai_insights: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    include_contributors: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    revoked: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -5,6 +5,8 @@ import { ArrowUpRight, Github } from 'lucide-react';
 import HomePage from './pages/HomePage';
 
 const AnalysisPage = lazy(() => import('./pages/AnalysisPage'));
+const HistoryPage = lazy(() => import('./pages/HistoryPage'));
+const ComparePage = lazy(() => import('./pages/ComparePage'));
 import BrandMark from './components/BrandMark';
 
 export default function App() {
@@ -44,6 +46,8 @@ export default function App() {
             <span className="brand-name">repo<span>pulse</span></span>
           </Link>
           <nav className="topbar-nav" aria-label="Main navigation">
+            <Link to="/history" className="nav-link">History</Link>
+            <Link to="/compare" className="nav-link">Compare</Link>
             <a href="https://github.com" target="_blank" rel="noreferrer" className="nav-link"><Github size={15} /> Open source <ArrowUpRight size={13} /></a>
             <span className="nav-divider" />
             <span className={`status-pill ${serviceStatus}`} role="status" aria-live="polite"><i /> {serviceStatus === 'ok' ? 'Systems operational' : serviceStatus === 'degraded' ? 'Systems degraded' : 'Checking systems'}</span>
@@ -53,7 +57,10 @@ export default function App() {
       <main className="page-shell">
         <Routes>
           <Route path="/" element={<HomePage />} />
+          <Route path="/history" element={<Suspense fallback={<div className="analysis-page loading-copy">Loading history…</div>}><HistoryPage /></Suspense>} />
+          <Route path="/compare" element={<Suspense fallback={<div className="analysis-page loading-copy">Loading comparison…</div>}><ComparePage /></Suspense>} />
           <Route path="/analysis/:id" element={<Suspense fallback={<div className="analysis-page loading-copy">Opening report…</div>}><AnalysisPage /></Suspense>} />
+          <Route path="/shared/:token" element={<Suspense fallback={<div className="analysis-page loading-copy">Opening shared report…</div>}><AnalysisPage /></Suspense>} />
         </Routes>
       </main>
       <footer className="site-footer"><span>RepoPulse</span><span>Open source intelligence for the people who build.</span><span>Made for curious teams <b>✳</b></span></footer>

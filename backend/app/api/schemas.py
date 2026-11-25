@@ -138,6 +138,9 @@ class AIInsightsOut(BaseModel):
 class AnalysisDetailOut(BaseModel):
     id: uuid.UUID
     repository_id: uuid.UUID
+    repository_full_name: str = ""
+    repository_owner: str = ""
+    repository_name: str = ""
     status: str
     progress_stage: str
     health: HealthOut
@@ -160,6 +163,59 @@ class AnalysisListItem(BaseModel):
     health_coverage: int
     created_at: datetime
     completed_at: Optional[datetime]
+
+
+class AnalysisHistoryItemOut(BaseModel):
+    id: uuid.UUID
+    repository_id: uuid.UUID
+    repository_full_name: str
+    status: str
+    total_commits: int
+    commits_per_month: float
+    bus_factor: int
+    health_score: Optional[int]
+    health_coverage: int
+    created_at: datetime
+    completed_at: Optional[datetime]
+
+
+class AnalysisHistoryPageOut(BaseModel):
+    items: list[AnalysisHistoryItemOut]
+    total: int
+    limit: int
+    offset: int
+
+
+class ComparisonDeltaOut(BaseModel):
+    health_score: Optional[int] = None
+    total_commits: int = 0
+    commits_per_month: float = 0.0
+    avg_commit_size: float = 0.0
+    bus_factor: int = 0
+    code_churn_additions: int = 0
+    code_churn_deletions: int = 0
+    avg_time_between_commits_hours: float = 0.0
+
+
+class AnalysisComparisonOut(BaseModel):
+    left: AnalysisDetailOut
+    right: AnalysisDetailOut
+    deltas: ComparisonDeltaOut
+
+
+class ShareLinkCreateRequest(BaseModel):
+    expires_in_hours: int = Field(72, ge=1, le=720)
+    include_ai_insights: bool = True
+    include_contributors: bool = True
+
+
+class ShareLinkOut(BaseModel):
+    token: str
+    analysis_id: uuid.UUID
+    expires_at: datetime
+    include_ai_insights: bool
+    include_contributors: bool
+    revoked: bool = False
 
 
 class HealthResponse(BaseModel):
