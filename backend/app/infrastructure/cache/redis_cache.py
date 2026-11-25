@@ -17,6 +17,7 @@ import json
 from typing import Any, Optional
 
 import redis.asyncio as aioredis
+from redis.exceptions import RedisError
 import structlog
 
 from app.core.config import get_settings
@@ -37,7 +38,11 @@ class RedisCache:
 
     async def get(self, domain: str, key: str) -> Optional[Any]:
         full_key = f"{_PREFIX}:{domain}:{key}"
-        raw = await self._redis.get(full_key)
+        try:
+            raw = await self._redis.get(full_key)
+        except RedisError as exc:
+            logger.warning("Redis cache unavailable", operation="get", error=str(exc))
+            return None
         if raw is None:
             return None
         try:
@@ -49,7 +54,10 @@ class RedisCache:
         self, domain: str, key: str, value: Any, ttl_seconds: int = 3600
     ) -> None:
         full_key = f"{_PREFIX}:{domain}:{key}"
-        await self._redis.set(full_key, json.dumps(value, default=str), ex=ttl_seconds)
+        try:
+            await self._redis.set(full_key, json.dumps(value, default=str), ex=ttl_seconds)
+        except RedisError as exc:
+            logger.warning("Redis cache unavailable", operation="set", error=str(exc))
 
     async def delete(self, domain: str, key: str) -> None:
         full_key = f"{_PREFIX}:{domain}:{key}"
@@ -65,7 +73,10 @@ class RedisCache:
         return deleted
 
     async def close(self) -> None:
-        await self._redis.close()
+        try:
+            await self._redis.aclose()
+        except AttributeError:
+            await self._redis.close()
 
 
 # ── Cached GitHub Client Wrapper ─────────────────────────────────────────────

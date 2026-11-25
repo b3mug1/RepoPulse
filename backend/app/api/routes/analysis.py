@@ -10,7 +10,7 @@ import uuid
 import csv
 from io import StringIO
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, HTTPException
 from fastapi.responses import Response
 
 from app.api.dependencies import (
@@ -34,6 +34,11 @@ from app.api.schemas import (
 )
 from app.usecases.analyze_repository import AnalyzeRepoRequest, AnalyzeRepositoryUseCase
 from app.usecases.get_analysis import GetAnalysisUseCase, ListAnalysesUseCase
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import update
+from app.infrastructure.database.session import get_db
+from app.infrastructure.database.models import AnalysisModel, RepositoryModel
+from app.infrastructure.jobs.celery_app import celery_app
 
 router = APIRouter(prefix="/analyses", tags=["Analyses"])
 
@@ -173,6 +178,50 @@ async def list_analyses(
         )
         for a in analyses
     ]
+
+
+@router.post("/{analysis_id}/retry", response_model=AnalyzeResponse, summary="Retry a failed analysis")
+async def retry_analysis(
+    analysis_id: uuid.UUID,
+    session: AsyncSession = Depends(get_db),
+    use_case: AnalyzeRepositoryUseCase = Depends(get_analyze_use_case),
+) -> AnalyzeResponse:
+    analysis = await session.get(AnalysisModel, analysis_id)
+    if not analysis:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    if analysis.status not in {"failed", "cancelled"}:
+        raise HTTPException(status_code=409, detail="Only failed or cancelled analyses can be retried")
+    repository = await session.get(RepositoryModel, analysis.repository_id)
+    if not repository:
+        raise HTTPException(status_code=404, detail="Repository not found")
+
+    result = await use_case.execute(AnalyzeRepoRequest(owner=repository.owner, name=repository.name))
+    return AnalyzeResponse(
+        analysis_id=result.analysis_id,
+        repository_id=result.repository_id,
+        status=result.status,
+    )
+
+
+@router.delete("/{analysis_id}", summary="Cancel an analysis")
+async def cancel_analysis(
+    analysis_id: uuid.UUID,
+    session: AsyncSession = Depends(get_db),
+) -> dict:
+    analysis = await session.get(AnalysisModel, analysis_id)
+    if not analysis:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    if analysis.status in {"completed", "failed", "cancelled"}:
+        raise HTTPException(status_code=409, detail="Analysis can no longer be cancelled")
+
+    celery_app.control.revoke(str(analysis_id), terminate=True, signal="SIGTERM")
+    await session.execute(
+        update(AnalysisModel)
+        .where(AnalysisModel.id == analysis_id)
+        .values(status="cancelled", error_message="Analysis cancelled by the user", progress_stage="Cancelled")
+    )
+    await session.commit()
+    return {"analysis_id": str(analysis_id), "status": "cancelled"}
 
 
 @router.get("/{analysis_id}/export.csv", response_class=Response, summary="Export analysis as CSV")

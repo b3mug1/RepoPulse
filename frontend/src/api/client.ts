@@ -105,6 +105,16 @@ export async function getAnalysis(analysisId: string): Promise<AnalysisDetail> {
   return data;
 }
 
+export async function cancelAnalysis(analysisId: string): Promise<{ status: string }> {
+  const { data } = await api.delete(`/analyses/${analysisId}`);
+  return data;
+}
+
+export async function retryAnalysis(analysisId: string): Promise<AnalyzeResponse> {
+  const { data } = await api.post(`/analyses/${analysisId}/retry`);
+  return data;
+}
+
 export async function getAnalysisHistory(repositoryId: string): Promise<AnalysisHistoryItem[]> {
   const { data } = await api.get('/analyses/', { params: { repository_id: repositoryId, limit: 10 } });
   return data;

@@ -14,7 +14,7 @@ class Settings(BaseSettings):
 
     app_env: Literal["development", "staging", "production"] = "development"
     app_debug: bool = True
-    app_secret_key: str = "change-me-in-production"
+    app_secret_key: str = ""
 
     postgres_host: str = "localhost"
     postgres_port: int = 5432
@@ -50,6 +50,18 @@ class Settings(BaseSettings):
     tokenharbor_model: str = "glm-5.3-flash"
 
     rate_limit_per_minute: int = 30
+    cors_origins: str = "http://localhost:4200,http://localhost:5173"
+
+    def validate_production(self) -> None:
+        if self.app_env != "production":
+            return
+        missing = []
+        if len(self.app_secret_key) < 32:
+            missing.append("APP_SECRET_KEY")
+        if missing:
+            raise RuntimeError(
+                "Production requires a secure configuration: " + ", ".join(missing)
+            )
 
 
 @lru_cache

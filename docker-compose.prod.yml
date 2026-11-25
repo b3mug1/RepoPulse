@@ -6,7 +6,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-analyzer}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-analyzer_secret}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB: ${POSTGRES_DB:-github_analyzer}
     command: postgres -c shared_buffers=32MB -c max_connections=25
     volumes:
@@ -40,7 +40,7 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_USER: ${POSTGRES_USER:-analyzer}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-analyzer_secret}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB: ${POSTGRES_DB:-github_analyzer}
 
   api:
@@ -51,11 +51,11 @@ services:
     environment:
       APP_ENV: production
       APP_DEBUG: "false"
-      APP_SECRET_KEY: ${APP_SECRET_KEY:-analyzer_secret_prod_key}
+      APP_SECRET_KEY: ${APP_SECRET_KEY:?APP_SECRET_KEY is required}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_USER: ${POSTGRES_USER:-analyzer}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-analyzer_secret}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB: ${POSTGRES_DB:-github_analyzer}
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/1
@@ -87,11 +87,11 @@ services:
     environment:
       APP_ENV: production
       APP_DEBUG: "false"
-      APP_SECRET_KEY: ${APP_SECRET_KEY:-analyzer_secret_prod_key}
+      APP_SECRET_KEY: ${APP_SECRET_KEY:?APP_SECRET_KEY is required}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_USER: ${POSTGRES_USER:-analyzer}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-analyzer_secret}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB: ${POSTGRES_DB:-github_analyzer}
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/1

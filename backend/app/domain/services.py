@@ -226,8 +226,8 @@ def calculate_repository_health(
         )
 
         ci_patterns = (
-            ".github/workflows/", ".gitlab-ci.yml", ".circleci/config.yml",
-            "jenkinsfile", "azure-pipelines.yml", "buildkite.yml", ".buildkite/", "bitbucket-pipelines.yml",
+            "github/workflows/", "gitlab-ci.yml", "circleci/config.yml",
+            "jenkinsfile", "azure-pipelines.yml", "buildkite.yml", "buildkite/", "bitbucket-pipelines.yml",
         )
         ci_files = [path for path in paths if any(pattern in path for pattern in ci_patterns)]
         add_component(

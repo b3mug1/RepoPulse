@@ -1,5 +1,5 @@
 import { Link, Routes, Route, useLocation } from 'react-router-dom';
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import anime from 'animejs';
 import { ArrowUpRight, Github } from 'lucide-react';
 import HomePage from './pages/HomePage';
@@ -9,6 +9,7 @@ import BrandMark from './components/BrandMark';
 
 export default function App() {
   const location = useLocation();
+  const [serviceStatus, setServiceStatus] = useState<'checking' | 'ok' | 'degraded'>('checking');
 
   useEffect(() => {
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -21,6 +22,16 @@ export default function App() {
       easing: 'easeOutCubic',
     });
   }, [location.pathname]);
+
+  useEffect(() => {
+    const base = (import.meta.env.VITE_API_URL || '/api/v1').replace(/\/$/, '');
+    fetch(`${base}/health`)
+      .then(async (response) => {
+        const data = await response.json();
+        setServiceStatus(response.ok && data.status === 'ok' ? 'ok' : 'degraded');
+      })
+      .catch(() => setServiceStatus('degraded'));
+  }, []);
 
   return (
     <div className="app-shell min-h-screen">
@@ -35,7 +46,7 @@ export default function App() {
           <nav className="topbar-nav" aria-label="Main navigation">
             <a href="https://github.com" target="_blank" rel="noreferrer" className="nav-link"><Github size={15} /> Open source <ArrowUpRight size={13} /></a>
             <span className="nav-divider" />
-            <span className="status-pill"><i /> Systems operational</span>
+            <span className={`status-pill ${serviceStatus}`} role="status" aria-live="polite"><i /> {serviceStatus === 'ok' ? 'Systems operational' : serviceStatus === 'degraded' ? 'Systems degraded' : 'Checking systems'}</span>
           </nav>
         </div>
       </header>

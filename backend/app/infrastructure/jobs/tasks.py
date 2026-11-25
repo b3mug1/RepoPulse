@@ -19,7 +19,7 @@ import uuid
 from datetime import datetime
 
 import structlog
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, delete
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import get_settings
@@ -46,6 +46,21 @@ from app.infrastructure.cache.redis_cache import RedisCache, CachedGitHubClient
 from app.infrastructure.jobs.celery_app import celery_app
 
 logger = structlog.get_logger(__name__)
+
+
+def _safe_error_message(exc: Exception) -> str:
+    if isinstance(exc, ExternalServiceError):
+        detail = str(exc).lower()
+        if "not found" in detail:
+            return "Repository not found or not accessible. Check the owner and name."
+        if "rate limit" in detail:
+            return "GitHub is temporarily limiting requests. Please retry later."
+        if "authentication" in detail:
+            return "GitHub authentication failed. Ask the administrator to check the configured token."
+        if "network" in detail or "timeout" in detail:
+            return "GitHub could not be reached. Please retry."
+        return "A GitHub service error prevented the analysis. Please retry."
+    return "The repository could not be analyzed because of an unexpected internal error."
 
 
 def _get_sync_session() -> Session:
@@ -80,12 +95,17 @@ def run_analysis_task(self, analysis_id: str, owner: str, name: str) -> dict:
         return {"status": "completed", "analysis_id": analysis_id}
 
     except Exception as exc:
-        logger.error("Analysis failed", analysis_id=analysis_id, error=str(exc))
-        _update_status(session, analysis_id, AnalysisStatus.FAILED, str(exc))
-        # Let Celery retry on transient errors
-        if isinstance(exc, ExternalServiceError) and self.request.retries < self.max_retries:
+        logger.error("Analysis failed", analysis_id=analysis_id, error=str(exc), exc_info=True)
+        retryable = isinstance(exc, ExternalServiceError)
+        detail = str(exc).lower()
+        retryable = retryable and not any(term in detail for term in ("not found", "authentication", "forbidden", "rejected"))
+        if retryable and self.request.retries < self.max_retries:
+            _set_progress(session, analysis_id, f"Retrying ({self.request.retries + 1}/{self.max_retries})")
             raise self.retry(exc=exc)
-        return {"status": "failed", "analysis_id": analysis_id, "error": str(exc)}
+
+        user_message = _safe_error_message(exc)
+        _update_status(session, analysis_id, AnalysisStatus.FAILED, user_message)
+        return {"status": "failed", "analysis_id": analysis_id, "error": user_message}
 
     finally:
         session.close()
@@ -254,7 +274,9 @@ def _save_results(session: Session, analysis_id: str, result: dict) -> None:
     analysis.detected_tech_stack = result["detected_tech_stack"]
     analysis.architecture_analysis = result["architecture_analysis"]
 
-    # Commit stats
+    # Commit stats and contributors are replaced, never appended on reruns.
+    session.execute(delete(CommitStatsModel).where(CommitStatsModel.analysis_id == aid))
+    session.execute(delete(ContributorModel).where(ContributorModel.analysis_id == aid))
     for c in result.get("commit_entities", []):
         model = CommitStatsModel(
             id=c.id, analysis_id=aid, sha=c.sha,

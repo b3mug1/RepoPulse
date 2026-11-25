@@ -7,6 +7,7 @@ evolve the public API independently.
 
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import datetime
 from typing import Optional
@@ -25,9 +26,14 @@ class AnalyzeRequest(BaseModel):
     @field_validator("owner", "name")
     @classmethod
     def no_slashes(cls, v: str) -> str:
-        if "/" in v:
+        v = v.strip()
+        if not v:
+            raise ValueError("owner and name must not be blank")
+        if "/" in v or "\\" in v:
             raise ValueError("Use separate owner and name fields, not owner/name")
-        return v.strip()
+        if not re.fullmatch(r"[A-Za-z0-9._-]+", v):
+            raise ValueError("Use only letters, numbers, dots, underscores, and hyphen")
+        return v
 
 
 class PaginationParams(BaseModel):
@@ -147,6 +153,7 @@ class AnalysisListItem(BaseModel):
 class HealthResponse(BaseModel):
     status: str = "ok"
     version: str = "1.0.0"
+    services: dict[str, str] = {}
 
 
 class ErrorResponse(BaseModel):

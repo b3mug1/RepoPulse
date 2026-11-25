@@ -45,8 +45,12 @@ class GitHubClient:
             resp = await client.get(url, headers=self._headers, params=params)
             if resp.status_code == 404:
                 raise ExternalServiceError("GitHub", "Repository not found")
+            if resp.status_code == 401:
+                raise ExternalServiceError("GitHub", "Authentication rejected")
             if resp.status_code == 403:
-                raise ExternalServiceError("GitHub", "Rate limit exceeded or forbidden")
+                raise ExternalServiceError("GitHub", "Rate limit exceeded or access forbidden")
+            if resp.status_code == 422:
+                raise ExternalServiceError("GitHub", "Repository request was rejected")
             resp.raise_for_status()
             return resp
 

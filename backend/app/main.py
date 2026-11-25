@@ -25,6 +25,7 @@ from app.core.logging import setup_logging
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Startup / shutdown hooks."""
     setup_logging()
+    get_settings().validate_production()
     yield
     # Shutdown: close pools, connections, etc.
 
@@ -47,15 +48,7 @@ def create_app() -> FastAPI:
     # ── Middleware ────────────────────────────────────────────────────────
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "http://localhost:7000",
-            "http://localhost:5173",
-            "http://localhost:4200",
-            "https://repo.b3mug1.dev",
-            "http://repo.b3mug1.dev",
-            "http://63.182.255.51",
-            "http://63.182.255.51:4200",
-        ],
+        allow_origins=[origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

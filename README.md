@@ -87,7 +87,7 @@ Services will be available at:
 
 | Service | URL |
 |---|---|
-| Frontend | http://localhost:3000 |
+| Frontend | http://localhost:4200 |
 | API | http://localhost:8000 |
 | Swagger UI | http://localhost:8000/docs |
 | PostgreSQL | localhost:5432 |

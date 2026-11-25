@@ -12,10 +12,11 @@ from httpx import AsyncClient
 class TestHealthEndpoint:
     async def test_health(self, client: AsyncClient):
         resp = await client.get("/api/v1/health")
-        assert resp.status_code == 200
+        assert resp.status_code in {200, 503}
         data = resp.json()
-        assert data["status"] == "ok"
+        assert data["status"] in {"ok", "degraded"}
         assert "version" in data
+        assert set(data["services"]) >= {"postgres", "redis", "celery"}
 
 
 @pytest.mark.asyncio

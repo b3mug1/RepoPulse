@@ -85,10 +85,9 @@ class AnalyzeRepositoryUseCase:
         # ── Dispatch background job ──────────────────────────────────────
         from app.infrastructure.jobs.tasks import run_analysis_task
 
-        run_analysis_task.delay(
-            str(analysis.id),
-            request.owner,
-            request.name,
+        run_analysis_task.apply_async(
+            args=(str(analysis.id), request.owner, request.name),
+            task_id=str(analysis.id),
         )
         logger.info("Analysis dispatched", analysis_id=str(analysis.id))
 
