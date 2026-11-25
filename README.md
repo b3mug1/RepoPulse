@@ -1,6 +1,6 @@
-# GitHub Repository Analyzer
+# RepoPulse
 
-> **Turn any public GitHub repo into a data-rich insight dashboard.**
+> **Open-source repository intelligence: turn any public GitHub repo into clear engineering signals, Health Score, and verifiable AI insights.**
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-61DAFB?logo=react&logoColor=black)](https://react.dev/)
@@ -9,270 +9,122 @@
 [![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A production-ready, full-stack analyzer for GitHub repositories. It fetches commits, contributors, and language data, runs background analysis with Celery, caches aggressively with Redis, persists results in PostgreSQL, and surfaces everything through a clean React dashboard — optionally enriched with AI insights from Google Gemini.
+RepoPulse analyzes public GitHub repositories via read-only REST APIs, computes transparent engineering metrics and a versioned **Health Score (v1.1)** in background Celery workers, caches responses in Redis with volatility-based TTLs and `ETag` conditional requests, persists results in PostgreSQL, and presents reports in a responsive React + TypeScript UI.
 
-## What It Does
+> **Live Demo:** *Add your deployed demo URL here after deployment (see [docs/OPERATIONS.md](docs/OPERATIONS.md)).*  
+> **Case Study & Engineering Trade-offs:** [docs/CASE_STUDY.md](docs/CASE_STUDY.md)
 
-Paste any public repo URL. Within seconds, you get:
+## Features
 
-| Feature | Description |
-|--------|-------------|
-| **Code Metrics** | Total commits, commit frequency, churn, average commit size, time between commits |
-| **Contributor Analytics** | Top contributors, bus factor risk score, commit distribution |
-| **Language Breakdown** | Visual pie chart of repository languages by bytes |
-| **AI Insights** | Project summary, README quality score, tech stack detection, architecture analysis |
-| **Async & Cached** | Redis-backed caching for GitHub data, async database calls, background job processing |
+| Area | Capabilities |
+|---|---|
+| **Engineering Metrics** | Sampled commits (up to 100 / 5 pages), commit velocity (`commits/day`, `commits/30d` in UTC), code churn, avg commit size, bus factor (by GitHub login -> email -> name), language distribution |
+| **Health Score (v1.1)** | Weighted 5-factor score (`activity`, `collaboration`, `documentation`, `testing`, `automation`), normalized over measured signals (`unknown` ≠ `0`), coverage %, confidence (`high`/`medium`/`low`), and actionable findings |
+| **Ecosystem & Delivery** | Pull requests (open ratio, close time), Issues (open age, resolve time), Releases (tag & cadence), CI/Actions runs, License, Branch Protection, `CODEOWNERS`, and 7d/30d/90d activity windows |
+| **Verifiable AI & Demo Mode** | Token Harbor (`glm-5.3-flash`) or Gemini with Pydantic JSON validation, file/signal `evidence_refs`, role-based summaries (`Developer` / `Manager` / `Recruiter`), data-sent disclosure, and deterministic **Demo Mode** without an API key |
+| **Product Workflows** | Filterable/sortable History, side-by-side Comparison (same repo over time or two repos), Re-analyze / Retry / Cancel, Saved Repos, time-limited revocable Share Links, UTF-8 CSV export (with formula escaping), and Print/PDF report |
+| **Accessibility & i18n** | `EN / RU` switcher, `prefers-reduced-motion`, keyboard `:focus-visible`, skip-to-content link, ARIA chart regions |
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    A[React UI<br/>Vite + TypeScript + Tailwind] -->|HTTP / SSE| B[FastAPI API]
-    B --> C[PostgreSQL]
-    B --> D[Redis Cache]
-    B --> E[Celery Worker]
-    E --> D
-    E --> F[GitHub API]
-    E --> G[Google Gemini]
+    UI["React 18 + Vite + TypeScript"] -->|REST| API["FastAPI (async)"]
+    API -->|asyncpg| DB["PostgreSQL 16"]
+    API -->|slowapi| Redis["Redis 7 (Cache + Broker)"]
+    API -->|enqueue| Celery["Celery Worker"]
+    Celery -->|ETag + TTL| GitHub["GitHub REST API"]
+    Celery -->|JSON validated| AI["Token Harbor (glm-5.3-flash) / Gemini / Demo"]
+    Celery --> DB
 ```
 
 ### Clean Architecture Layers
 
-```
-┌─────────────────────────────────────┐
-│  API Layer (FastAPI, schemas, DI)   │
-├─────────────────────────────────────┤
-│  Use Cases (orchestration)          │
-├─────────────────────────────────────┤
-│  Domain (entities, pure logic)      │
-├─────────────────────────────────────┤
-│  Infrastructure (DB, Redis, HTTP)   │
-└─────────────────────────────────────┘
-```
-
 | Layer | Directory | Responsibility |
 |---|---|---|
-| **Domain** | `backend/app/domain/` | Entities, repository interfaces, pure business logic |
-| **Use Cases** | `backend/app/usecases/` | Application orchestration with zero framework dependencies |
-| **Infrastructure** | `backend/app/infrastructure/` | Database, Redis, GitHub client, Celery tasks |
-| **API** | `backend/app/api/` | FastAPI routes, Pydantic schemas, middleware |
-
-> **Dependency rule:** outer layers depend inward. The domain layer depends on nothing.
+| **Domain** | `backend/app/domain/` | Entities, repository ports, pure metric & Health Score logic |
+| **Use Cases** | `backend/app/usecases/` | Application orchestration (`AnalyzeRepositoryUseCase`, `GetAnalysisUseCase`) |
+| **Infrastructure** | `backend/app/infrastructure/` | PostgreSQL (SQLAlchemy + Alembic), Redis (`CachedGitHubClient`), GitHub/AI clients, Celery tasks |
+| **API** | `backend/app/api/` | FastAPI routes, Pydantic schemas, DI, proxy-safe rate limiting |
 
 ## Quick Start
 
 ### Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) & [Docker Compose](https://docs.docker.com/compose/)
-- (Optional) [GitHub Personal Access Token](https://github.com/settings/tokens) — higher rate limits
-- (Optional) [Google Gemini API Key](https://ai.google.dev/) — enables AI insights
+- *(Optional)* `GITHUB_TOKEN` — increases GitHub API rate limit from 60 to 5,000 req/hr
+- *(Optional)* `TOKENHARBOR_API_KEY` (or `GEMINI_API_KEY`) — without a key, RepoPulse runs in deterministic **Demo Mode**
 
-### 1. Clone & Configure
-
-```bash
-git clone <repo-url>
-cd github_repo_analyzer/backend
-cp .env.example .env
-# Edit .env and add GITHUB_TOKEN and/or GEMINI_API_KEY
-```
-
-### 2. Run Everything
+### Run Locally (Development)
 
 ```bash
-cd ..
+cp backend/.env.example backend/.env
 docker compose up --build
 ```
-
-Services will be available at:
 
 | Service | URL |
 |---|---|
 | Frontend | http://localhost:4200 |
 | API | http://localhost:8000 |
-| Swagger UI | http://localhost:8000/docs |
-| PostgreSQL | localhost:5432 |
-| Redis | localhost:6379 |
+| Swagger UI (dev only) | http://localhost:8000/docs |
+| Health & Metrics | http://localhost:8000/api/v1/health and `/api/v1/health/metrics` |
 
-### 3. Analyze a Repository
-
-```bash
-curl -X POST http://localhost:8000/api/v1/analyses/analyze \
-  -H "Content-Type: application/json" \
-  -d '{"owner": "fastapi", "name": "fastapi"}'
-```
-
-Response:
-
-```json
-{
-  "analysis_id": "a1b2c3d4...",
-  "repository_id": "e5f6g7h8...",
-  "status": "pending",
-  "message": "Analysis queued. Poll GET /analyses/{analysis_id} for results."
-}
-```
-
-Then poll for results:
-
-```bash
-curl http://localhost:8000/api/v1/analyses/{analysis_id}
-```
-
-Or just use the web UI — it's prettier.
-
-## Project Structure
-
-```
-github_repo_analyzer/
-├── backend/
-│   ├── app/
-│   │   ├── api/                     # FastAPI layer
-│   │   │   ├── routes/
-│   │   │   │   ├── analysis.py      # POST /analyze, GET /analyses/{id}
-│   │   │   │   └── health.py        # GET /health
-│   │   │   ├── schemas.py           # Pydantic request/response models
-│   │   │   ├── dependencies.py      # DI composition root
-│   │   │   └── rate_limit.py        # slowapi rate limiter
-│   │   ├── core/                    # Config, logging, exceptions
-│   │   ├── domain/                  # Pure business logic
-│   │   ├── infrastructure/          # External concerns
-│   │   │   ├── cache/               # Redis cache + CachedGitHubClient
-│   │   │   ├── database/            # SQLAlchemy models, async session, repos
-│   │   │   ├── external/            # GitHub & Gemini API clients
-│   │   │   └── jobs/                # Celery app & background tasks
-│   │   ├── usecases/                # Application services
-│   │   └── main.py                  # FastAPI app factory
-│   ├── alembic/                     # Database migrations
-│   ├── tests/
-│   │   ├── unit/                    # Fast pure-logic tests
-│   │   └── integration/             # API tests (requires DB)
-│   ├── Dockerfile
-│   └── pyproject.toml
-├── frontend/
-│   ├── src/
-│   │   ├── api/client.ts            # Axios client with types
-│   │   ├── components/              # Charts, metrics, AI panel
-│   │   └── pages/                   # Home & analysis views
-│   ├── Dockerfile
-│   └── package.json
-├── docker-compose.yml
-└── README.md
-```
-
-## Database Schema
-
-```mermaid
-erDiagram
-    users ||--o{ repositories : owns
-    repositories ||--o{ analyses : has
-    analyses ||--o| commits_stats : produces
-    analyses ||--o| contributors : produces
-
-    users {
-        uuid id PK
-        string username
-        string email
-    }
-
-    repositories {
-        uuid id PK
-        string full_name
-        string owner
-        string name
-        json language_distribution
-    }
-
-    analyses {
-        uuid id PK
-        uuid repository_id FK
-        uuid user_id FK
-        string status
-        json detected_tech_stack
-        timestamp created_at
-        timestamp completed_at
-    }
-
-    commits_stats {
-        uuid id PK
-        uuid analysis_id FK
-        int total_commits
-        int additions
-        int deletions
-    }
-
-    contributors {
-        uuid id PK
-        uuid analysis_id FK
-        string username
-        int commits
-    }
-```
-
-Design highlights:
-
-- **UUIDs everywhere** — safe for distributed Celery worker ID generation
-- **CASCADE deletes** from repository → analyses → stats
-- **Indexes** on foreign keys, status, and `full_name`
-- **JSON columns** for `language_distribution` and `detected_tech_stack`
+For production deployment, backups, and migrations, see [docs/OPERATIONS.md](docs/OPERATIONS.md) and [docs/SECURITY_AND_PRIVACY.md](docs/SECURITY_AND_PRIVACY.md).
 
 ## API Endpoints
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/api/v1/analyses/analyze` | Trigger analysis (returns `202 Accepted`) |
-| `GET` | `/api/v1/analyses/{id}` | Get analysis detail |
-| `GET` | `/api/v1/analyses/` | List analyses with optional `repository_id` filter |
-| `GET` | `/api/v1/health` | Health check |
+| `POST` | `/api/v1/analyses/analyze` | Queue repository analysis (`202 Accepted`) |
+| `GET` | `/api/v1/analyses/{id}` | Get analysis report, Health Score, sample scope, and extended signals |
+| `GET` | `/api/v1/analyses/history` | Paginated history with `status`, `search`, and sorting |
+| `GET` | `/api/v1/analyses/compare` | Compare two analyses (`left_id`, `right_id`) with deltas |
+| `POST` | `/api/v1/analyses/{id}/retry` | Retry a failed or cancelled analysis |
+| `DELETE` | `/api/v1/analyses/{id}` | Cancel an in-progress analysis |
+| `POST` | `/api/v1/analyses/{id}/share` | Create time-limited share link with visibility flags |
+| `GET` | `/api/v1/analyses/shared/{token}` | Fetch publicly shared report |
+| `GET` | `/api/v1/analyses/{id}/export.csv` | Download UTF-8 BOM CSV with source URL & formula escaping |
+| `GET` | `/api/v1/health` | Real PostgreSQL, Redis, and Celery worker health check |
+| `GET` | `/api/v1/health/metrics` | Operational metrics (duration, GitHub errors, cache hit rate, queue depth) |
 
-## Configuration
-
-All settings are driven by environment variables. Copy `backend/.env.example` to `backend/.env` and adjust:
+## Environment Variables
 
 | Variable | Description | Default |
 |---|---|---|
+| `APP_ENV` | `development` \| `staging` \| `production` | `development` |
+| `APP_SECRET_KEY` | Required in production (`>= 32` chars) | *(empty)* |
+| `POSTGRES_*` | PostgreSQL connection (`POSTGRES_PASSWORD` required in prod) | `localhost:5432` |
+| `REDIS_URL` | Redis cache URL | `redis://localhost:6379/0` |
 | `GITHUB_TOKEN` | GitHub PAT for higher rate limits | *(empty)* |
-| `GEMINI_API_KEY` | Google Gemini API key | *(empty)* |
-| `POSTGRES_*` | Database connection params | localhost:5432 |
-| `REDIS_URL` | Redis cache connection | `redis://localhost:6379/0` |
-| `RATE_LIMIT_PER_MINUTE` | API rate limit per IP | `30` |
+| `TOKENHARBOR_API_KEY` | Token Harbor API key (`glm-5.3-flash`) | *(empty — Demo Mode)* |
+| `GEMINI_API_KEY` | Optional Google Gemini fallback key | *(empty)* |
+| `TRUSTED_PROXIES` | Comma-separated proxy IPs allowed to set `X-Forwarded-For` | *(empty)* |
+| `CORS_ORIGINS` | Allowed frontend origins | `http://localhost:4200,http://localhost:5173` |
 
-## Running Tests
+## Limitations & Methodology
+
+- **Sampled commit window:** Analyses inspect up to the **100 most recent commits** (5 GitHub API pages) rather than cloning full git history. Every report explicitly displays `sample_scope` and truncation status.
+- **Heuristic Health Score:** Missing signals (e.g., unavailable tree or unconfigured AI) are marked `unknown` and excluded from normalization rather than scored as `0`. File-path heuristics do not prove test coverage or passing CI.
+- **No individual developer evaluation:** Contributor counts and Bus Factor measure repository continuity risk on sampled commits, never individual developer productivity or candidate quality.
+- **AI transparency:** Model outputs (`ai_summary`, `role_summaries`) are labeled as model interpretations, validated via Pydantic, and paired with `evidence_refs` and a `data_sent_disclosure`.
+
+## Running Tests & Quality Checks
 
 ```bash
+# Backend unit, API, migration, security, and ops tests
 cd backend
-
-# Unit tests — no external dependencies
 pytest tests/unit -v
+ruff check .
 
-# Full suite — needs Postgres + Redis
-pytest tests/ -v --cov=app
+# Frontend typecheck, lint, unit tests, and production build
+cd frontend
+npm run typecheck && npm run lint && npm test && npm run build
 ```
 
-## Key Architectural Decisions
+## Screenshots & Demo
 
-1. **Clean Architecture** — domain logic is isolated from frameworks. Swap FastAPI for Flask or SQLAlchemy for another ORM without touching business rules.
-
-2. **Celery for Background Jobs** — GitHub pagination + Gemini calls take 30–120s. Celery with `acks_late=True` ensures work survives worker crashes.
-
-3. **Redis Multi-Role** — shared Redis instance with separate logical databases for cache, Celery broker, and result backend.
-
-4. **CachedGitHubClient (Proxy Pattern)** — transparently wraps the raw GitHub client. Immutable data is cached for 24h; mutable metadata for 1h.
-
-5. **Bus Factor Algorithm** — sorts contributors by commits, accumulates until ≥80% threshold. A bus factor of 1 is a red flag. 
-
-6. **Async Everything** — `asyncpg` + `httpx` + `redis.asyncio` keep the FastAPI event loop free. Celery tasks bridge to async code with `asyncio.run()`.
-
-7. **Rate Limiting** — `slowapi` with Redis backend, per-IP sliding window. The `/analyze` endpoint has a tighter 10/min limit.
-
-
-## Contributing
-
-Contributions are welcome! Please open an issue first to discuss what you'd like to change, or submit a pull request with a clear description.
+> Add screenshots of the landing page, report dashboard, and a short walkthrough GIF here after deploying your demo environment.
 
 ## License
 
-This project is licensed under the MIT License — see [LICENSE](LICENSE) for details.
-
----
-
-<p align="center">Built with ☕, 🐍, and ⚛️</p>
+MIT — see [LICENSE](LICENSE).
