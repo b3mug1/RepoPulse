@@ -48,7 +48,7 @@ export default function App() {
           <nav className="topbar-nav" aria-label="Main navigation">
             <Link to="/history" className="nav-link">History</Link>
             <Link to="/compare" className="nav-link">Compare</Link>
-            <a href="https://github.com" target="_blank" rel="noreferrer" className="nav-link"><Github size={15} /> Open source <ArrowUpRight size={13} /></a>
+            <a href="https://github.com/b3mug1/github_repo_analyzer" target="_blank" rel="noreferrer" className="nav-link"><Github size={15} /> Open source <ArrowUpRight size={13} /></a>
             <span className="nav-divider" />
             <span className={`status-pill ${serviceStatus}`} role="status" aria-live="polite"><i /> {serviceStatus === 'ok' ? 'Systems operational' : serviceStatus === 'degraded' ? 'Systems degraded' : 'Checking systems'}</span>
           </nav>

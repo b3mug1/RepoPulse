@@ -93,10 +93,12 @@ export default function AnalysisPage() {
     return () => { active = false; if (timer) clearTimeout(timer); };
   }, [id, token]);
 
+  const analysisId = analysis?.id;
+  const analysisStatus = analysis?.status;
   useEffect(() => {
-    if (!analysis || analysis.status !== 'completed' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (!analysisId || analysisStatus !== 'completed' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     anime({ targets: '.analysis-section', opacity: [0, 1], translateY: [16, 0], delay: anime.stagger(85), duration: 650, easing: 'easeOutCubic' });
-  }, [analysis?.id, analysis?.status]);
+  }, [analysisId, analysisStatus]);
 
   const handleCancel = async () => {
     if (!analysis) return;
