@@ -4,7 +4,6 @@ Domain services — pure business logic that doesn't belong to a single entity.
 
 from __future__ import annotations
 
-from collections import Counter
 from datetime import datetime, timezone
 from typing import Sequence
 

@@ -18,8 +18,8 @@ from dataclasses import dataclass
 
 import structlog
 
-from app.core.exceptions import AlreadyExistsError, ValidationError
-from app.domain.entities import Analysis, AnalysisStatus, Repository
+from app.core.exceptions import ValidationError
+from app.domain.entities import Analysis, AnalysisStatus
 from app.domain.repositories import AnalysisRepository, RepositoryRepository
 from app.infrastructure.cache.redis_cache import CachedGitHubClient
 
