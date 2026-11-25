@@ -253,7 +253,7 @@ export default function AnalysisPage() {
     {analysis.contributors.length > 0 && (
       <section className="analysis-section"><div className="report-block-heading"><span className="section-index">02</span><div><span className="analysis-overline">THE PEOPLE</span><h2>Contribution map</h2></div></div><ContributorRanking contributors={analysis.contributors} /></section>
     )}
-    {(analysis.ai_insights.ai_summary || analysis.ai_insights.detected_tech_stack.length > 0) && (
+    {(analysis.ai_insights.ai_summary || analysis.ai_insights.detected_tech_stack.length > 0 || analysis.ai_insights.ai_metadata?.status === 'unavailable') && (
       <section className="analysis-section"><div className="report-block-heading"><span className="section-index">03</span><div><span className="analysis-overline">MACHINE-ASSISTED CONTEXT</span><h2>Project understanding</h2></div></div><AIInsightsPanel insights={analysis.ai_insights} /></section>
     )}
     {!isSharedMode && history.length > 1 && <section className="glass p-6 analysis-section"><div className="report-block-heading"><span className="section-index"><Clock3 size={16} /></span><div><span className="analysis-overline">LONGITUDINAL VIEW</span><h2>Analysis history</h2></div></div><div className="history-list">{history.map((item) => <Link key={item.id} to={`/analysis/${item.id}`} className={`history-row ${item.id === analysis.id ? 'history-current' : ''}`}><span>{new Date(item.created_at).toLocaleString()}</span><span className="history-status">{item.status}</span><strong>Health {item.health_score ?? '—'}<small> / 100</small></strong></Link>)}</div></section>}

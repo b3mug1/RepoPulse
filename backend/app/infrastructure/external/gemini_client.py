@@ -9,15 +9,44 @@ Supports:
 from __future__ import annotations
 
 import json
-from typing import Optional
+import re
+from typing import Literal, Optional
 
 import httpx
 import structlog
+from pydantic import BaseModel, Field, ValidationError
 
 from app.core.config import get_settings
 from app.core.exceptions import ExternalServiceError
 
 logger = structlog.get_logger(__name__)
+
+PROMPT_VERSION = "2.0"
+MAX_FILE_PATHS_FOR_AI = 120
+MAX_README_CHARS_FOR_AI = 2500
+MAX_LANGUAGES_FOR_AI = 10
+
+
+class _EvidenceRef(BaseModel):
+    claim: str = Field(..., min_length=1, max_length=300)
+    source_type: Literal["file", "signal"] = "file"
+    target: str = Field(..., min_length=1, max_length=200)
+
+
+class _RoleSummaries(BaseModel):
+    developer: str = ""
+    manager: str = ""
+    recruiter: str = ""
+
+
+class _AIResponsePayload(BaseModel):
+    summary: Optional[str] = None
+    architecture_analysis: Optional[str] = None
+    readme_score: Optional[float] = Field(None, ge=0.0, le=10.0)
+    readme_feedback: Optional[str] = None
+    tech_stack: list[str] = Field(default_factory=list)
+    role_summaries: _RoleSummaries = Field(default_factory=_RoleSummaries)
+    evidence_refs: list[_EvidenceRef] = Field(default_factory=list)
 
 
 class AIClient:
@@ -60,31 +89,73 @@ class AIClient:
         Single consolidated API call that returns all AI insights at once.
         Falls back to deterministic demo heuristics when no AI API key is configured.
         """
-        if not self._enabled:
-            return self._demo_analysis(repo_name, description, languages, file_paths, readme)
+        trimmed_languages = dict(list(languages.items())[:MAX_LANGUAGES_FOR_AI])
+        trimmed_paths = file_paths[:MAX_FILE_PATHS_FOR_AI]
+        trimmed_readme = (readme or "")[:MAX_README_CHARS_FOR_AI]
 
-        file_tree_sample = "\n".join(file_paths[:150])
-        readme_excerpt = (readme or "N/A")[:3000]
+        disclosure = (
+            f"Sent to provider: repository name, description, top {len(trimmed_languages)} languages, "
+            f"{len(trimmed_paths)} file paths (max {MAX_FILE_PATHS_FOR_AI}), and README excerpt "
+            f"({len(trimmed_readme)} chars, max {MAX_README_CHARS_FOR_AI}). "
+            "No commit diffs, private tokens, or contributor emails are transmitted."
+        )
+
+        if not self._enabled:
+            result = self._demo_analysis(repo_name, description, trimmed_languages, trimmed_paths, trimmed_readme or None)
+            result["ai_metadata"] = {
+                "provider": "demo",
+                "model": "deterministic-heuristic",
+                "prompt_version": PROMPT_VERSION,
+                "status": "demo",
+                "data_sent_disclosure": disclosure,
+                "role_summaries": result.pop("role_summaries", {}),
+                "evidence_refs": result.pop("evidence_refs", []),
+            }
+            return result
+
+        file_tree_sample = "\n".join(trimmed_paths)
+        readme_excerpt = trimmed_readme or "N/A"
 
         prompt = (
-            "You are an expert software engineer analyzing a GitHub repository.\n"
-            "Provide a comprehensive analysis and return ONLY a valid JSON object "
-            "with exactly these keys (no markdown fences, no extra text):\n\n"
+            "You are an expert software engineer analyzing a public GitHub repository.\n"
+            "Rules:\n"
+            "1. Separate observable facts from interpretations. Ground every key claim in a concrete file path or GitHub signal.\n"
+            "2. NEVER evaluate individual developers, rank candidates, or judge personal productivity.\n"
+            "3. Return ONLY a valid JSON object (no markdown fences, no extra text) matching this exact schema:\n\n"
             '{\n'
-            '  "summary": "<concise project summary, max 300 words: purpose, features, tech stack, target audience>",\n'
-            '  "architecture_analysis": "<architecture analysis, max 500 words: folder structure, patterns, separation of concerns, quality>",\n'
+            '  "summary": "<concise project summary, max 250 words>",\n'
+            '  "architecture_analysis": "<architecture analysis, max 400 words>",\n'
             '  "readme_score": <float 0-10>,\n'
-            '  "readme_feedback": "<brief README quality feedback on completeness, clarity, setup instructions>",\n'
-            '  "tech_stack": ["<framework1>", "<library1>", "<tool1>", ...]\n'
+            '  "readme_feedback": "<brief README quality feedback>",\n'
+            '  "tech_stack": ["<framework1>", "<library1>", "<tool1>"],\n'
+            '  "role_summaries": {\n'
+            '    "developer": "<technical summary for engineers: stack, structure, testing/CI>",\n'
+            '    "manager": "<delivery summary for engineering managers: maturity, bus factor/CI risks, docs>",\n'
+            '    "recruiter": "<neutral domain & tech-stack overview for technical hiring; NO candidate evaluation>"\n'
+            '  },\n'
+            '  "evidence_refs": [\n'
+            '    {"claim": "<short claim>", "source_type": "file", "target": "<exact file path or signal name>"}\n'
+            '  ]\n'
             '}\n\n'
             f"Repository: {repo_name}\n"
             f"Description: {description or 'N/A'}\n"
-            f"Languages: {languages}\n\n"
+            f"Languages: {trimmed_languages}\n\n"
             f"File tree (sample):\n{file_tree_sample}\n\n"
             f"README:\n{readme_excerpt}"
         )
         raw = await self._generate(prompt)
-        return self._parse_combined_result(raw)
+        parsed = self._parse_combined_result(raw)
+        model_name = self._tokenharbor_model if self._provider == "tokenharbor" else self._gemini_model
+        parsed["ai_metadata"] = {
+            "provider": self._provider,
+            "model": model_name,
+            "prompt_version": PROMPT_VERSION,
+            "status": "ok" if parsed.get("ai_summary") else "invalid_response",
+            "data_sent_disclosure": disclosure,
+            "role_summaries": parsed.pop("role_summaries", {}),
+            "evidence_refs": parsed.pop("evidence_refs", []),
+        }
+        return parsed
 
     # ── Private helpers ──────────────────────────────────────────────────
 
@@ -188,12 +259,27 @@ class AIClient:
         feedback = (
             "Demo heuristic check: " + ("; ".join(feedback_parts) if feedback_parts else "README covers core setup and usage sections.")
         )
+        evidence_refs: list[dict[str, str]] = []
+        for p in file_paths[:12]:
+            pl = p.lower()
+            if any(k in pl for k in ("readme", "pyproject.toml", "package.json", "dockerfile", ".github/workflows/")):
+                evidence_refs.append({"claim": f"Detected {p}", "source_type": "file", "target": p})
+        if languages:
+            top_lang = next(iter(languages.keys()))
+            evidence_refs.append({"claim": f"Primary language signal: {top_lang}", "source_type": "signal", "target": "GitHub Languages API"})
+
         return {
             "ai_summary": summary,
             "readme_quality_score": round(min(readme_score, 10.0), 1),
             "readme_quality_feedback": feedback,
             "detected_tech_stack": stack[:10],
             "architecture_analysis": architecture,
+            "role_summaries": {
+                "developer": f"Stack: {', '.join(stack[:6]) or top_langs}. {architecture}",
+                "manager": f"Project uses {top_langs}; {'tests detected' if has_tests else 'no standard test paths'}; {'CI detected' if has_ci else 'no standard CI detected'}.",
+                "recruiter": f"Public repository focused on {top_langs} with {', '.join(stack[:5]) or 'standard tooling'}. (Repository overview only; not a candidate assessment.)",
+            },
+            "evidence_refs": evidence_refs[:6],
         }
 
     @staticmethod
@@ -208,27 +294,33 @@ class AIClient:
 
     @classmethod
     def _parse_combined_result(cls, raw: str) -> dict:
-        """Parse the single combined JSON response into all AI insight fields."""
+        """Validate and parse the combined JSON response into all AI insight fields."""
         defaults = {
             "ai_summary": None,
             "readme_quality_score": None,
             "readme_quality_feedback": None,
             "detected_tech_stack": [],
             "architecture_analysis": None,
+            "role_summaries": {},
+            "evidence_refs": [],
         }
         try:
             cleaned = cls._strip_fences(raw)
-            data = json.loads(cleaned)
+            match = re.search(r"\{.*\}", cleaned, flags=re.DOTALL)
+            json_text = match.group(0) if match else cleaned
+            payload = _AIResponsePayload.model_validate_json(json_text)
             return {
-                "ai_summary": data.get("summary") or None,
-                "readme_quality_score": float(data["readme_score"]) if data.get("readme_score") is not None else None,
-                "readme_quality_feedback": data.get("readme_feedback") or None,
-                "detected_tech_stack": data.get("tech_stack", []) if isinstance(data.get("tech_stack"), list) else [],
-                "architecture_analysis": data.get("architecture_analysis") or None,
+                "ai_summary": payload.summary or None,
+                "readme_quality_score": payload.readme_score,
+                "readme_quality_feedback": payload.readme_feedback or None,
+                "detected_tech_stack": [str(item) for item in payload.tech_stack[:15]],
+                "architecture_analysis": payload.architecture_analysis or None,
+                "role_summaries": payload.role_summaries.model_dump(),
+                "evidence_refs": [ref.model_dump() for ref in payload.evidence_refs[:10]],
             }
-        except (json.JSONDecodeError, ValueError, KeyError) as exc:
-            logger.warning("Failed to parse AI JSON response", error=str(exc), raw=raw[:500])
-            return {**defaults, "ai_summary": raw[:2000] if raw else None}
+        except (json.JSONDecodeError, ValidationError, ValueError, KeyError) as exc:
+            logger.warning("Failed to validate AI JSON response", error=str(exc), raw=raw[:500])
+            return {**defaults, "ai_summary": None}
 
 
 # Backward-compatible alias

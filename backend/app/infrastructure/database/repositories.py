@@ -75,6 +75,7 @@ def _analysis_model_to_entity(m: AnalysisModel) -> Analysis:
         readme_quality_feedback=m.readme_quality_feedback,
         detected_tech_stack=m.detected_tech_stack or [],
         architecture_analysis=m.architecture_analysis,
+        ai_metadata=m.ai_metadata or {},
         created_at=m.created_at, completed_at=m.completed_at,
     )
 

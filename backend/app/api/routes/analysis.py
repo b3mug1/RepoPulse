@@ -162,6 +162,7 @@ def _build_analysis_detail(
             readme_quality_feedback=analysis.readme_quality_feedback if include_ai else None,
             detected_tech_stack=analysis.detected_tech_stack if include_ai else [],
             architecture_analysis=analysis.architecture_analysis if include_ai else None,
+            ai_metadata=analysis.ai_metadata if include_ai else {},
         ),
         contributors=[
             ContributorOut(

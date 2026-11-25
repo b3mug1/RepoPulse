@@ -50,6 +50,24 @@ export interface AIInsights {
   readme_quality_feedback: string | null;
   detected_tech_stack: string[];
   architecture_analysis: string | null;
+  ai_metadata?: {
+    provider?: string;
+    model?: string;
+    prompt_version?: string;
+    status?: string;
+    reason?: string;
+    data_sent_disclosure?: string;
+    role_summaries?: {
+      developer?: string;
+      manager?: string;
+      recruiter?: string;
+    };
+    evidence_refs?: {
+      claim: string;
+      source_type: string;
+      target: string;
+    }[];
+  };
 }
 
 export interface AnalysisDetail {

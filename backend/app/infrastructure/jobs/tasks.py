@@ -202,6 +202,7 @@ async def _analyze(analysis_id: str, owner: str, name: str, session: Session) ->
         "readme_quality_feedback": None,
         "detected_tech_stack": [],
         "architecture_analysis": None,
+        "ai_metadata": {"status": "unavailable"},
     }
     _set_progress(session, analysis_id, "Generating AI insights")
     try:
@@ -219,6 +220,7 @@ async def _analyze(analysis_id: str, owner: str, name: str, session: Session) ->
         )
     except Exception as ai_err:
         logger.warning("AI analysis skipped (non-fatal)", error=str(ai_err))
+        ai_results["ai_metadata"] = {"status": "unavailable", "reason": "AI provider unavailable"}
 
     extended_signals = {
         "pull_requests": compute_pr_metrics(pulls),
@@ -300,6 +302,7 @@ def _save_results(session: Session, analysis_id: str, result: dict) -> None:
     analysis.readme_quality_feedback = result["readme_quality_feedback"]
     analysis.detected_tech_stack = result["detected_tech_stack"]
     analysis.architecture_analysis = result["architecture_analysis"]
+    analysis.ai_metadata = result.get("ai_metadata", {})
 
     # Commit stats and contributors are replaced, never appended on reruns.
     session.execute(delete(CommitStatsModel).where(CommitStatsModel.analysis_id == aid))

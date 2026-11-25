@@ -133,6 +133,7 @@ class AIInsightsOut(BaseModel):
     readme_quality_feedback: Optional[str]
     detected_tech_stack: list[str]
     architecture_analysis: Optional[str]
+    ai_metadata: dict = Field(default_factory=dict)
 
 
 class AnalysisDetailOut(BaseModel):

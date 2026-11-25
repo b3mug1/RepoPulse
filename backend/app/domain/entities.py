@@ -69,6 +69,7 @@ class Analysis:
     readme_quality_feedback: Optional[str] = None
     detected_tech_stack: list[str] = field(default_factory=list)
     architecture_analysis: Optional[str] = None
+    ai_metadata: dict = field(default_factory=dict)
 
     created_at: datetime = field(default_factory=datetime.utcnow)
     completed_at: Optional[datetime] = None
