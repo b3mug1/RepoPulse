@@ -9,6 +9,7 @@ from sqlalchemy import text
 
 from app.api.schemas import HealthResponse
 from app.core.config import get_settings
+from app.core.metrics import metrics
 from app.infrastructure.database.session import async_session_factory
 from app.infrastructure.jobs.celery_app import celery_app
 
@@ -55,3 +56,17 @@ async def health_check() -> JSONResponse:
         status_code=code,
         content=HealthResponse(status=overall, services=services).model_dump(),
     )
+
+
+@router.get("/health/metrics", summary="Operational metrics snapshot")
+async def operational_metrics() -> dict:
+    settings = get_settings()
+    queue_depth: int | None = None
+    broker = aioredis.from_url(settings.celery_broker_url, decode_responses=True)
+    try:
+        queue_depth = int(await broker.llen("celery"))
+    except Exception:
+        queue_depth = None
+    finally:
+        await broker.aclose()
+    return metrics.snapshot(celery_queue_depth=queue_depth)

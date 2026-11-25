@@ -109,6 +109,11 @@ services:
       migrate:
         condition: service_completed_successfully
     command: celery -A app.infrastructure.jobs.celery_app worker --loglevel=info --concurrency=1
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.infrastructure.jobs.celery_app inspect ping -d celery@$$HOSTNAME --timeout=5 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   frontend:
     build:

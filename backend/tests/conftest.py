@@ -6,7 +6,6 @@ transport so we never actually start uvicorn.
 """
 
 import asyncio
-import uuid
 from typing import AsyncIterator, Iterator
 
 import pytest

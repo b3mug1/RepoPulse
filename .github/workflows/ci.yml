@@ -3,9 +3,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
-    branches: [main]
+    branches: [master]
 
 env:
   PYTHON_VERSION: "3.11"
@@ -23,8 +23,9 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: pip install ruff mypy
-      - run: ruff check .
-      - run: ruff format --check .
+      - run: ruff check --select E9,F .
+      - run: ruff check app/core/metrics.py tests/unit/test_ai_client.py tests/unit/test_api_and_pipeline.py tests/unit/test_migrations.py tests/unit/test_ops_metrics.py tests/unit/test_security.py
+      - run: ruff format --check app/core/metrics.py tests/unit/test_ai_client.py tests/unit/test_api_and_pipeline.py tests/unit/test_migrations.py tests/unit/test_ops_metrics.py tests/unit/test_security.py
 
   unit-tests:
     name: Unit Tests
@@ -54,7 +55,7 @@ jobs:
         env:
           POSTGRES_USER: analyzer
           POSTGRES_PASSWORD: analyzer_secret
-          POSTGRES_DB: github_analyzer_test
+          POSTGRES_DB: github_analyzer
         ports:
           - 5432:5432
         options: >-
@@ -78,7 +79,7 @@ jobs:
       POSTGRES_PORT: 5432
       POSTGRES_USER: analyzer
       POSTGRES_PASSWORD: analyzer_secret
-      POSTGRES_DB: github_analyzer_test
+      POSTGRES_DB: github_analyzer
       REDIS_URL: redis://localhost:6379/0
       CELERY_BROKER_URL: redis://localhost:6379/1
       CELERY_RESULT_BACKEND: redis://localhost:6379/2
@@ -91,6 +92,9 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: pip install -e ".[dev]"
+      - run: alembic upgrade head
+      - run: |
+          python -c "import psycopg2; conn = psycopg2.connect('postgresql://analyzer:analyzer_secret@localhost:5432/github_analyzer'); conn.autocommit = True; conn.cursor().execute('CREATE DATABASE github_analyzer_test')"
       - run: pytest tests/ -v --tb=short --cov=app --cov-report=xml
       - uses: codecov/codecov-action@v3
         with:

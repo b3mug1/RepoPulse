@@ -15,6 +15,7 @@ Design decisions
 from __future__ import annotations
 
 import asyncio
+import time
 import uuid
 from datetime import datetime, timezone
 
@@ -24,6 +25,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import get_settings
 from app.core.exceptions import ExternalServiceError
+from app.core.metrics import metrics
 from app.domain.entities import AnalysisStatus, CommitStats
 from app.domain.services import (
     aggregate_contributors,
@@ -83,7 +85,13 @@ def run_analysis_task(self, analysis_id: str, owner: str, name: str) -> dict:
 
     Returns a summary dict for Celery result backend inspection.
     """
-    logger.info("Starting analysis task", analysis_id=analysis_id, repo=f"{owner}/{name}")
+    started_at = time.monotonic()
+    structlog.contextvars.bind_contextvars(
+        analysis_id=analysis_id,
+        task_id=getattr(self.request, "id", None) or analysis_id,
+        repo=f"{owner}/{name}",
+    )
+    logger.info("Starting analysis task")
     session = _get_sync_session()
 
     try:
@@ -97,11 +105,13 @@ def run_analysis_task(self, analysis_id: str, owner: str, name: str) -> dict:
         _save_results(session, analysis_id, result)
         _update_status(session, analysis_id, AnalysisStatus.COMPLETED)
 
-        logger.info("Analysis completed", analysis_id=analysis_id)
+        duration = time.monotonic() - started_at
+        metrics.record_analysis(duration_seconds=duration, success=True)
+        logger.info("Analysis completed", duration_seconds=round(duration, 3))
         return {"status": "completed", "analysis_id": analysis_id}
 
     except Exception as exc:
-        logger.error("Analysis failed", analysis_id=analysis_id, error=str(exc), exc_info=True)
+        logger.error("Analysis failed", error=str(exc), exc_info=True)
         retryable = isinstance(exc, ExternalServiceError)
         detail = str(exc).lower()
         retryable = retryable and not any(term in detail for term in ("not found", "authentication", "forbidden", "rejected"))
@@ -109,11 +119,14 @@ def run_analysis_task(self, analysis_id: str, owner: str, name: str) -> dict:
             _set_progress(session, analysis_id, f"Retrying ({self.request.retries + 1}/{self.max_retries})")
             raise self.retry(exc=exc)
 
+        duration = time.monotonic() - started_at
+        metrics.record_analysis(duration_seconds=duration, success=False)
         user_message = _safe_error_message(exc)
         _update_status(session, analysis_id, AnalysisStatus.FAILED, user_message)
         return {"status": "failed", "analysis_id": analysis_id, "error": user_message}
 
     finally:
+        structlog.contextvars.clear_contextvars()
         session.close()
 
 

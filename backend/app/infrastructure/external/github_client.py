@@ -1,10 +1,9 @@
 
 from __future__ import annotations
 
-import asyncio
 import re
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 import structlog
@@ -12,6 +11,7 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 
 from app.core.config import get_settings
 from app.core.exceptions import ExternalServiceError
+from app.core.metrics import metrics
 from app.domain.entities import CommitStats, Repository
 
 logger = structlog.get_logger(__name__)
@@ -56,15 +56,19 @@ class GitHubClient:
             if resp.status_code == 304:
                 return resp
             if resp.status_code == 404:
+                metrics.record_github_error()
                 raise ExternalServiceError("GitHub", "Repository not found")
             if resp.status_code == 401:
+                metrics.record_github_error()
                 raise ExternalServiceError("GitHub", "Authentication rejected")
             if resp.status_code in (403, 429):
+                metrics.record_github_error()
                 remaining = resp.headers.get("X-RateLimit-Remaining")
                 if resp.status_code == 429 or remaining == "0":
                     raise ExternalServiceError("GitHub", "Rate limit exceeded")
                 raise ExternalServiceError("GitHub", "Rate limit exceeded or access forbidden")
             if resp.status_code == 422:
+                metrics.record_github_error()
                 raise ExternalServiceError("GitHub", "Repository request was rejected")
             resp.raise_for_status()
             return resp

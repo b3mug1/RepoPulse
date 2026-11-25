@@ -8,7 +8,6 @@ directly verify the core business rules.
 import uuid
 from datetime import datetime, timedelta, timezone
 
-import pytest
 
 from app.domain.entities import CommitStats, Contributor
 from app.domain.services import (
