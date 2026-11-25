@@ -96,12 +96,39 @@ class CachedGitHubClient:
 
     async def get_repository(self, owner: str, name: str) -> dict:
         cache_key = f"repo:{owner}/{name}"
-        cached = await self._cache.get("github", cache_key)
-        if cached:
-            logger.debug("Cache hit", key=cache_key)
-            return cached
-        data = await self._gh.get_repository(owner, name)
-        await self._cache.set("github", cache_key, data, ttl_seconds=3600)
+        return await self._get_with_conditional(
+            cache_key,
+            f"https://api.github.com/repos/{owner}/{name}",
+            ttl_seconds=1800,
+        )
+
+    async def _get_with_conditional(
+        self, cache_key: str, url: str, *, params: dict | None = None, ttl_seconds: int = 1800
+    ) -> Any:
+        envelope = await self._cache.get("github", cache_key)
+        etag = None
+        if isinstance(envelope, dict) and "data" in envelope and "fetched_at" in envelope:
+            import time
+            age = time.time() - float(envelope["fetched_at"])
+            if age < ttl_seconds:
+                logger.debug("Cache hit", key=cache_key)
+                return envelope["data"]
+            etag = envelope.get("etag")
+        elif envelope is not None:
+            return envelope
+
+        import time
+        status_code, data, new_etag = await self._gh.get_conditional(url, params=params, etag=etag)
+        if status_code == 304 and isinstance(envelope, dict) and "data" in envelope:
+            logger.debug("Conditional 304 cache refresh", key=cache_key)
+            data = envelope["data"]
+
+        await self._cache.set(
+            "github",
+            cache_key,
+            {"data": data, "etag": new_etag, "fetched_at": time.time()},
+            ttl_seconds=ttl_seconds * 4,
+        )
         return data
 
     async def get_commits(self, owner: str, name: str, *, max_pages: int = 5) -> list[dict]:
@@ -130,7 +157,7 @@ class CachedGitHubClient:
         if cached:
             return cached
         data = await self._gh.get_languages(owner, name)
-        await self._cache.set("github", cache_key, data, ttl_seconds=3600)
+        await self._cache.set("github", cache_key, data, ttl_seconds=21600)
         return data
 
     async def get_readme(self, owner: str, name: str) -> str | None:
@@ -149,5 +176,51 @@ class CachedGitHubClient:
         if cached:
             return cached
         data = await self._gh.get_repo_tree(owner, name, branch)
+        await self._cache.set("github", cache_key, data, ttl_seconds=3600)
+        return data
+
+    async def get_pull_requests(self, owner: str, name: str) -> list[dict]:
+        cache_key = f"pulls:{owner}/{name}"
+        cached = await self._cache.get("github", cache_key)
+        if cached is not None:
+            return cached
+        data = await self._gh.get_pull_requests(owner, name)
+        await self._cache.set("github", cache_key, data, ttl_seconds=900)
+        return data
+
+    async def get_issues(self, owner: str, name: str) -> list[dict]:
+        cache_key = f"issues:{owner}/{name}"
+        cached = await self._cache.get("github", cache_key)
+        if cached is not None:
+            return cached
+        data = await self._gh.get_issues(owner, name)
+        await self._cache.set("github", cache_key, data, ttl_seconds=900)
+        return data
+
+    async def get_releases(self, owner: str, name: str) -> list[dict]:
+        cache_key = f"releases:{owner}/{name}"
+        cached = await self._cache.get("github", cache_key)
+        if cached is not None:
+            return cached
+        data = await self._gh.get_releases(owner, name)
+        await self._cache.set("github", cache_key, data, ttl_seconds=21600)
+        return data
+
+    async def get_workflow_runs(self, owner: str, name: str) -> list[dict] | None:
+        cache_key = f"runs:{owner}/{name}"
+        cached = await self._cache.get("github", cache_key)
+        if cached is not None:
+            return cached
+        data = await self._gh.get_workflow_runs(owner, name)
+        if data is not None:
+            await self._cache.set("github", cache_key, data, ttl_seconds=900)
+        return data
+
+    async def get_branch_protection_status(self, owner: str, name: str, branch: str) -> str:
+        cache_key = f"branch_protection:{owner}/{name}:{branch}"
+        cached = await self._cache.get("github", cache_key)
+        if cached is not None:
+            return cached
+        data = await self._gh.get_branch_protection_status(owner, name, branch)
         await self._cache.set("github", cache_key, data, ttl_seconds=3600)
         return data

@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 import structlog
 from sqlalchemy import create_engine, delete
@@ -28,12 +28,18 @@ from app.domain.entities import AnalysisStatus, CommitStats
 from app.domain.services import (
     aggregate_contributors,
     calculate_bus_factor,
+    calculate_repository_health,
+    compute_activity_windows,
     compute_avg_commit_size,
     compute_avg_time_between_commits,
+    compute_ci_signals,
     compute_code_churn,
     compute_commits_per_day,
     compute_commits_per_month,
-    calculate_repository_health,
+    compute_governance_signals,
+    compute_issue_metrics,
+    compute_pr_metrics,
+    compute_release_metrics,
 )
 from app.infrastructure.database.models import (
     AnalysisModel,
@@ -127,10 +133,19 @@ async def _analyze(analysis_id: str, owner: str, name: str, session: Session) ->
 
     _set_progress(session, analysis_id, "Fetching GitHub data")
     # ── Step 1: Fetch data ───────────────────────────────────────────────
-    commits_list = await gh.get_commits(owner, name, max_pages=5)
-    languages_raw = await gh.get_languages(owner, name)
-    readme = await gh.get_readme(owner, name)
-    file_paths = await gh.get_repo_tree(owner, name)
+    repo_data, commits_list, languages_raw, readme, file_paths, pulls, issues, releases, workflow_runs = await asyncio.gather(
+        gh.get_repository(owner, name),
+        gh.get_commits(owner, name, max_pages=5),
+        gh.get_languages(owner, name),
+        gh.get_readme(owner, name),
+        gh.get_repo_tree(owner, name),
+        gh.get_pull_requests(owner, name),
+        gh.get_issues(owner, name),
+        gh.get_releases(owner, name),
+        gh.get_workflow_runs(owner, name),
+    )
+    default_branch = repo_data.get("default_branch", "main") if isinstance(repo_data, dict) else "main"
+    branch_protection = await gh.get_branch_protection_status(owner, name, default_branch)
 
     # Fetch detail for each commit (concurrent batches to avoid rate limits)
     commit_entities: list[CommitStats] = []
@@ -205,6 +220,16 @@ async def _analyze(analysis_id: str, owner: str, name: str, session: Session) ->
     except Exception as ai_err:
         logger.warning("AI analysis skipped (non-fatal)", error=str(ai_err))
 
+    extended_signals = {
+        "pull_requests": compute_pr_metrics(pulls),
+        "issues": compute_issue_metrics(issues),
+        "releases": compute_release_metrics(releases),
+        "ci": compute_ci_signals(workflow_runs, file_paths),
+        "governance": compute_governance_signals(repo_data if isinstance(repo_data, dict) else {}, file_paths, branch_protection),
+        "activity_windows": compute_activity_windows(commit_entities),
+        "data_refreshed_at": datetime.now(timezone.utc).isoformat(),
+    }
+
     await cache.close()
 
     return {
@@ -214,6 +239,7 @@ async def _analyze(analysis_id: str, owner: str, name: str, session: Session) ->
         "health_coverage": health_coverage,
         "health_breakdown": health_breakdown,
         "health_findings": health_findings,
+        "extended_signals": extended_signals,
         "commit_entities": commit_entities,
         "contributors": contributors,
     }
@@ -266,6 +292,7 @@ def _save_results(session: Session, analysis_id: str, result: dict) -> None:
     analysis.health_coverage = result["health_coverage"]
     analysis.health_breakdown = result["health_breakdown"]
     analysis.health_findings = result["health_findings"]
+    analysis.extended_signals = result.get("extended_signals", {})
 
     # AI
     analysis.ai_summary = result["ai_summary"]

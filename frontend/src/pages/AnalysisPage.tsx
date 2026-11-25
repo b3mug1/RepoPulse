@@ -21,6 +21,7 @@ import MetricsGrid from '../components/MetricsGrid';
 import AIInsightsPanel from '../components/AIInsightsPanel';
 import CommitFrequencyChart from '../components/CommitFrequencyChart';
 import RepositoryHealthPanel from '../components/RepositoryHealthPanel';
+import ExtendedSignalsPanel from '../components/ExtendedSignalsPanel';
 
 function estimateProgressPercent(stage: string): number {
   const s = stage.toLowerCase();
@@ -247,6 +248,7 @@ export default function AnalysisPage() {
     )}
     <div className="analysis-section"><RepositoryHealthPanel health={analysis.health} /></div>
     <section className="analysis-section report-block"><div className="report-block-heading"><span className="section-index">01</span><div><span className="analysis-overline">PROJECT PULSE</span><h2>Engineering signals</h2></div></div><MetricsGrid metrics={analysis.metrics} /></section>
+    <div className="analysis-section mt-4"><ExtendedSignalsPanel signals={analysis.extended_signals} /></div>
     <section className="grid grid-cols-1 lg:grid-cols-2 gap-4 analysis-section"><LanguagePieChart distribution={analysis.metrics.language_distribution} /><CommitFrequencyChart data={analysis.metrics.commits_per_date} /></section>
     {analysis.contributors.length > 0 && (
       <section className="analysis-section"><div className="report-block-heading"><span className="section-index">02</span><div><span className="analysis-overline">THE PEOPLE</span><h2>Contribution map</h2></div></div><ContributorRanking contributors={analysis.contributors} /></section>

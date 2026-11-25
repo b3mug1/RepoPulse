@@ -86,6 +86,51 @@ export interface AnalysisDetail {
     window_end_at: string | null;
     timezone: string;
   };
+  extended_signals?: {
+    pull_requests?: {
+      sampled_count: number;
+      open_count: number;
+      closed_count: number;
+      merged_count: number;
+      draft_count: number;
+      open_ratio: number | null;
+      avg_time_to_close_hours: number | null;
+      avg_open_age_hours: number | null;
+    };
+    issues?: {
+      sampled_count: number;
+      open_count: number;
+      closed_count: number;
+      avg_open_age_hours: number | null;
+      avg_time_to_close_hours: number | null;
+    };
+    releases?: {
+      sampled_count: number;
+      latest_tag: string | null;
+      latest_published_at: string | null;
+      avg_days_between_releases: number | null;
+    };
+    ci?: {
+      providers_detected: string[];
+      actions_runs_sampled: number | null;
+      actions_success_rate: number | null;
+      latest_run_conclusion: string | null;
+    };
+    governance?: {
+      license: string | null;
+      default_branch: string;
+      branch_protection: string;
+      has_codeowners: boolean | null;
+    };
+    activity_windows?: {
+      last_7_days: number;
+      last_30_days: number;
+      prev_30_days: number;
+      last_90_days: number;
+      trend_30d: string;
+    };
+    data_refreshed_at?: string;
+  };
   error_message: string | null;
   metrics: Metrics;
   ai_insights: AIInsights;

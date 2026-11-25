@@ -145,6 +145,7 @@ class AnalysisDetailOut(BaseModel):
     progress_stage: str
     health: HealthOut
     sample_scope: SampleScopeOut
+    extended_signals: dict = Field(default_factory=dict)
     error_message: Optional[str]
     metrics: MetricsOut
     ai_insights: AIInsightsOut

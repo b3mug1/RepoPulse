@@ -40,19 +40,39 @@ class GitHubClient:
         retry=retry_if_exception_type((httpx.TransportError, httpx.TimeoutException)),
         reraise=True,
     )
-    async def _get(self, url: str, params: dict | None = None) -> httpx.Response:
+    async def _get(
+        self, url: str, params: dict | None = None, *, etag: str | None = None
+    ) -> httpx.Response:
+        headers = dict(self._headers)
+        if etag:
+            headers["If-None-Match"] = etag
         async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.get(url, headers=self._headers, params=params)
+            resp = await client.get(url, headers=headers, params=params)
+            if resp.status_code == 304:
+                return resp
             if resp.status_code == 404:
                 raise ExternalServiceError("GitHub", "Repository not found")
             if resp.status_code == 401:
                 raise ExternalServiceError("GitHub", "Authentication rejected")
-            if resp.status_code == 403:
+            if resp.status_code in (403, 429):
+                remaining = resp.headers.get("X-RateLimit-Remaining")
+                if resp.status_code == 429 or remaining == "0":
+                    raise ExternalServiceError("GitHub", "Rate limit exceeded")
                 raise ExternalServiceError("GitHub", "Rate limit exceeded or access forbidden")
             if resp.status_code == 422:
                 raise ExternalServiceError("GitHub", "Repository request was rejected")
             resp.raise_for_status()
             return resp
+
+    async def get_conditional(
+        self, url: str, params: dict | None = None, *, etag: str | None = None
+    ) -> tuple[int, Any, str | None]:
+        """Perform a conditional GET with ETag support; returns (status, data, new_etag)."""
+        resp = await self._get(url, params=params, etag=etag)
+        new_etag = resp.headers.get("ETag") or etag
+        if resp.status_code == 304:
+            return 304, None, new_etag
+        return resp.status_code, resp.json(), new_etag
 
     # ── Pagination ───────────────────────────────────────────────────────
 
@@ -138,6 +158,65 @@ class GitHubClient:
         except ExternalServiceError:
             # None means unavailable; [] means a successfully inspected empty tree.
             return None
+
+    async def get_pull_requests(self, owner: str, name: str, *, per_page: int = 50) -> list[dict[str, Any]]:
+        """GET /repos/{owner}/{name}/pulls (latest updated PRs across states)."""
+        try:
+            resp = await self._get(
+                f"{GITHUB_API}/repos/{owner}/{name}/pulls",
+                params={"state": "all", "sort": "updated", "direction": "desc", "per_page": per_page},
+            )
+            data = resp.json()
+            return data if isinstance(data, list) else []
+        except ExternalServiceError:
+            return []
+
+    async def get_issues(self, owner: str, name: str, *, per_page: int = 50) -> list[dict[str, Any]]:
+        """GET /repos/{owner}/{name}/issues (latest updated issues, excluding PRs)."""
+        try:
+            resp = await self._get(
+                f"{GITHUB_API}/repos/{owner}/{name}/issues",
+                params={"state": "all", "sort": "updated", "direction": "desc", "per_page": per_page},
+            )
+            data = resp.json()
+            return [item for item in data if "pull_request" not in item] if isinstance(data, list) else []
+        except ExternalServiceError:
+            return []
+
+    async def get_releases(self, owner: str, name: str, *, per_page: int = 30) -> list[dict[str, Any]]:
+        """GET /repos/{owner}/{name}/releases."""
+        try:
+            resp = await self._get(
+                f"{GITHUB_API}/repos/{owner}/{name}/releases",
+                params={"per_page": per_page},
+            )
+            data = resp.json()
+            return data if isinstance(data, list) else []
+        except ExternalServiceError:
+            return []
+
+    async def get_workflow_runs(self, owner: str, name: str, *, per_page: int = 25) -> list[dict[str, Any]] | None:
+        """GET /repos/{owner}/{name}/actions/runs."""
+        try:
+            resp = await self._get(
+                f"{GITHUB_API}/repos/{owner}/{name}/actions/runs",
+                params={"per_page": per_page},
+            )
+            runs = resp.json().get("workflow_runs", [])
+            return runs if isinstance(runs, list) else []
+        except ExternalServiceError:
+            return None
+
+    async def get_branch_protection_status(self, owner: str, name: str, branch: str) -> str:
+        """Check whether the default branch is marked as protected via public branch metadata."""
+        try:
+            resp = await self._get(f"{GITHUB_API}/repos/{owner}/{name}/branches/{branch}")
+            data = resp.json()
+            if "protected" in data:
+                return "protected" if data["protected"] else "unprotected"
+            return "unknown"
+        except ExternalServiceError:
+            return "unknown"
 
     # ── Helpers ──────────────────────────────────────────────────────────
 

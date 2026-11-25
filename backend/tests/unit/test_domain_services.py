@@ -14,12 +14,18 @@ from app.domain.entities import CommitStats, Contributor
 from app.domain.services import (
     aggregate_contributors,
     calculate_bus_factor,
+    calculate_repository_health,
+    compute_activity_windows,
     compute_avg_commit_size,
     compute_avg_time_between_commits,
+    compute_ci_signals,
     compute_code_churn,
     compute_commits_per_day,
     compute_commits_per_month,
-    calculate_repository_health,
+    compute_governance_signals,
+    compute_issue_metrics,
+    compute_pr_metrics,
+    compute_release_metrics,
 )
 
 
@@ -275,3 +281,58 @@ class TestAggregateContributors:
         ]
         # 2025-06-03 15:00+05:00 == 2025-06-03 10:00 UTC -> exactly 2.0 days
         assert compute_commits_per_day(commits) == 1.0
+
+
+class TestExtendedGitHubSignals:
+    def test_pr_and_issue_metrics(self):
+        now = datetime(2025, 6, 10, 12, 0, tzinfo=timezone.utc)
+        pulls = [
+            {"state": "open", "draft": True, "created_at": "2025-06-09T12:00:00Z"},
+            {"state": "closed", "merged_at": "2025-06-09T18:00:00Z", "created_at": "2025-06-09T12:00:00Z", "closed_at": "2025-06-09T18:00:00Z"},
+        ]
+        pr_res = compute_pr_metrics(pulls, now=now)
+        assert pr_res["open_count"] == 1
+        assert pr_res["merged_count"] == 1
+        assert pr_res["avg_time_to_close_hours"] == 6.0
+        assert pr_res["avg_open_age_hours"] == 24.0
+
+        issues = [
+            {"state": "open", "created_at": "2025-06-09T12:00:00Z"},
+            {"state": "closed", "pull_request": {"url": "..."}, "created_at": "2025-06-01T00:00:00Z", "closed_at": "2025-06-02T00:00:00Z"},
+        ]
+        issue_res = compute_issue_metrics(issues, now=now)
+        assert issue_res["sampled_count"] == 1
+        assert issue_res["open_count"] == 1
+
+    def test_releases_ci_governance_and_windows(self):
+        releases = [
+            {"tag_name": "v1.1.0", "draft": False, "published_at": "2025-06-10T00:00:00Z"},
+            {"tag_name": "v1.0.0", "draft": False, "published_at": "2025-06-01T00:00:00Z"},
+        ]
+        rel = compute_release_metrics(releases)
+        assert rel["latest_tag"] == "v1.1.0"
+        assert rel["avg_days_between_releases"] == 9.0
+
+        ci = compute_ci_signals(
+            [{"status": "completed", "conclusion": "success"}, {"status": "completed", "conclusion": "failure"}],
+            [".github/workflows/ci.yml", ".gitlab-ci.yml"],
+        )
+        assert "GitHub Actions" in ci["providers_detected"]
+        assert "GitLab CI" in ci["providers_detected"]
+        assert ci["actions_success_rate"] == 50.0
+
+        gov = compute_governance_signals({"license": {"spdx_id": "MIT"}, "default_branch": "main"}, [".github/CODEOWNERS"], "protected")
+        assert gov["license"] == "MIT"
+        assert gov["has_codeowners"] is True
+        assert gov["branch_protection"] == "protected"
+
+        now = datetime(2025, 6, 10, 12, 0, tzinfo=timezone.utc)
+        win = compute_activity_windows([
+            _make_commit(committed_at=now - timedelta(days=2)),
+            _make_commit(committed_at=now - timedelta(days=20)),
+            _make_commit(committed_at=now - timedelta(days=45)),
+        ], now=now)
+        assert win["last_7_days"] == 1
+        assert win["last_30_days"] == 2
+        assert win["last_90_days"] == 3
+        assert win["trend_30d"] == "up"

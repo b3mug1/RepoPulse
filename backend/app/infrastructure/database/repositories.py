@@ -69,6 +69,7 @@ def _analysis_model_to_entity(m: AnalysisModel) -> Analysis:
         health_coverage=m.health_coverage or 0,
         health_breakdown=m.health_breakdown or {},
         health_findings=m.health_findings or [],
+        extended_signals=m.extended_signals or {},
         progress_stage=m.progress_stage or "queued",
         ai_summary=m.ai_summary, readme_quality_score=m.readme_quality_score,
         readme_quality_feedback=m.readme_quality_feedback,

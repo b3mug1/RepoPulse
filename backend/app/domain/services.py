@@ -310,3 +310,180 @@ def calculate_repository_health(
     if not findings:
         add("low", "No major issues detected in available signals", "This is a heuristic snapshot, not a full code, security, or quality audit.")
     return score, components, findings, available_weight
+
+
+def _parse_iso_utc(raw: str | None) -> datetime | None:
+    if not raw:
+        return None
+    try:
+        return to_utc(datetime.fromisoformat(raw.replace("Z", "+00:00")))
+    except ValueError:
+        return None
+
+
+def compute_pr_metrics(pulls: Sequence[dict], now: datetime | None = None) -> dict:
+    """Summarize sampled pull requests: open ratio, close time, open age, drafts."""
+    ref = to_utc(now) if now is not None else datetime.now(timezone.utc)
+    open_prs = [p for p in pulls if p.get("state") == "open"]
+    closed_prs = [p for p in pulls if p.get("state") == "closed"]
+    merged_prs = [p for p in closed_prs if p.get("merged_at")]
+
+    close_hours: list[float] = []
+    for p in closed_prs:
+        created = _parse_iso_utc(p.get("created_at"))
+        closed = _parse_iso_utc(p.get("closed_at"))
+        if created and closed and closed >= created:
+            close_hours.append((closed - created).total_seconds() / 3600)
+
+    open_ages: list[float] = []
+    for p in open_prs:
+        created = _parse_iso_utc(p.get("created_at"))
+        if created and ref >= created:
+            open_ages.append((ref - created).total_seconds() / 3600)
+
+    total = len(pulls)
+    return {
+        "sampled_count": total,
+        "open_count": len(open_prs),
+        "closed_count": len(closed_prs),
+        "merged_count": len(merged_prs),
+        "draft_count": sum(1 for p in open_prs if p.get("draft")),
+        "open_ratio": round(len(open_prs) / total, 2) if total else None,
+        "avg_time_to_close_hours": round(sum(close_hours) / len(close_hours), 1) if close_hours else None,
+        "avg_open_age_hours": round(sum(open_ages) / len(open_ages), 1) if open_ages else None,
+    }
+
+
+def compute_issue_metrics(issues: Sequence[dict], now: datetime | None = None) -> dict:
+    """Summarize sampled issues (excluding PRs): open/closed counts, open age, resolution time."""
+    ref = to_utc(now) if now is not None else datetime.now(timezone.utc)
+    pure_issues = [i for i in issues if "pull_request" not in i]
+    open_issues = [i for i in pure_issues if i.get("state") == "open"]
+    closed_issues = [i for i in pure_issues if i.get("state") == "closed"]
+
+    resolve_hours: list[float] = []
+    for i in closed_issues:
+        created = _parse_iso_utc(i.get("created_at"))
+        closed = _parse_iso_utc(i.get("closed_at"))
+        if created and closed and closed >= created:
+            resolve_hours.append((closed - created).total_seconds() / 3600)
+
+    open_ages: list[float] = []
+    for i in open_issues:
+        created = _parse_iso_utc(i.get("created_at"))
+        if created and ref >= created:
+            open_ages.append((ref - created).total_seconds() / 3600)
+
+    return {
+        "sampled_count": len(pure_issues),
+        "open_count": len(open_issues),
+        "closed_count": len(closed_issues),
+        "avg_open_age_hours": round(sum(open_ages) / len(open_ages), 1) if open_ages else None,
+        "avg_time_to_close_hours": round(sum(resolve_hours) / len(resolve_hours), 1) if resolve_hours else None,
+    }
+
+
+def compute_release_metrics(releases: Sequence[dict]) -> dict:
+    """Summarize sampled releases: count, latest tag, and average interval in days."""
+    published = [r for r in releases if not r.get("draft")]
+    dates = sorted(
+        (d for r in published if (d := _parse_iso_utc(r.get("published_at") or r.get("created_at"))) is not None),
+        reverse=True,
+    )
+    intervals: list[float] = [
+        (dates[i] - dates[i + 1]).total_seconds() / 86_400
+        for i in range(len(dates) - 1)
+    ]
+    latest = published[0] if published else None
+    return {
+        "sampled_count": len(published),
+        "latest_tag": latest.get("tag_name") if latest else None,
+        "latest_published_at": (latest.get("published_at") or latest.get("created_at")) if latest else None,
+        "avg_days_between_releases": round(sum(intervals) / len(intervals), 1) if intervals else None,
+    }
+
+
+def compute_ci_signals(workflow_runs: Sequence[dict] | None, file_paths: Sequence[str] | None) -> dict:
+    """Summarize CI config presence across providers and recent GitHub Actions run outcomes."""
+    paths = [p.replace("\\", "/").lower() for p in file_paths or []]
+    provider_markers = {
+        "GitHub Actions": ".github/workflows/",
+        "GitLab CI": "gitlab-ci.yml",
+        "CircleCI": "circleci/config.yml",
+        "Jenkins": "jenkinsfile",
+        "Azure Pipelines": "azure-pipelines.yml",
+        "Buildkite": "buildkite",
+        "Bitbucket Pipelines": "bitbucket-pipelines.yml",
+        "Travis CI": ".travis.yml",
+        "Drone / Woodpecker": "woodpecker",
+    }
+    providers = [name for name, marker in provider_markers.items() if any(marker in p for p in paths)]
+
+    completed = [r for r in (workflow_runs or []) if r.get("status") == "completed"]
+    successes = [r for r in completed if r.get("conclusion") == "success"]
+    latest_run = workflow_runs[0] if workflow_runs else None
+    return {
+        "providers_detected": providers,
+        "actions_runs_sampled": len(workflow_runs) if workflow_runs is not None else None,
+        "actions_success_rate": round(len(successes) / len(completed) * 100, 1) if completed else None,
+        "latest_run_conclusion": latest_run.get("conclusion") if latest_run else None,
+    }
+
+
+def compute_governance_signals(
+    repo_data: dict, file_paths: Sequence[str] | None, branch_protection: str
+) -> dict:
+    """Summarize license, branch protection, and CODEOWNERS presence."""
+    license_info = repo_data.get("license") or {}
+    license_spdx = license_info.get("spdx_id") if isinstance(license_info, dict) else None
+    if license_spdx == "NOASSERTION":
+        license_spdx = license_info.get("name")
+    paths = {p.replace("\\", "/").lower().removeprefix("./") for p in file_paths or []}
+    has_codeowners = (
+        None if file_paths is None
+        else any(p in {"codeowners", ".github/codeowners", "docs/codeowners"} for p in paths)
+    )
+    return {
+        "license": license_spdx or None,
+        "default_branch": repo_data.get("default_branch", "main"),
+        "branch_protection": branch_protection,
+        "has_codeowners": has_codeowners,
+    }
+
+
+def compute_activity_windows(commits: Sequence[CommitStats], now: datetime | None = None) -> dict:
+    """Count sampled commits in 7d / 30d / 90d UTC windows and compute 30d trend."""
+    ref = to_utc(now) if now is not None else datetime.now(timezone.utc)
+    c_7 = 0
+    c_30 = 0
+    c_prev_30 = 0
+    c_90 = 0
+    for c in commits:
+        age_days = (ref - to_utc(c.committed_at)).total_seconds() / 86_400
+        if age_days < 0:
+            continue
+        if age_days <= 7:
+            c_7 += 1
+        if age_days <= 30:
+            c_30 += 1
+        elif age_days <= 60:
+            c_prev_30 += 1
+        if age_days <= 90:
+            c_90 += 1
+
+    if len(commits) < 2:
+        trend = "insufficient_data"
+    elif c_30 > c_prev_30:
+        trend = "up"
+    elif c_30 < c_prev_30:
+        trend = "down"
+    else:
+        trend = "stable"
+
+    return {
+        "last_7_days": c_7,
+        "last_30_days": c_30,
+        "prev_30_days": c_prev_30,
+        "last_90_days": c_90,
+        "trend_30d": trend,
+    }

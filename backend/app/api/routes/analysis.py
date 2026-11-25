@@ -142,6 +142,7 @@ def _build_analysis_detail(
             "window_end_at": max(utc_dates) if utc_dates else None,
             "timezone": "UTC",
         },
+        extended_signals=analysis.extended_signals or {},
         error_message=analysis.error_message,
         metrics=MetricsOut(
             total_commits=analysis.total_commits,
