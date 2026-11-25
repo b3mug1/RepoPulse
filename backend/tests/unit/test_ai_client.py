@@ -3,10 +3,10 @@
 import pytest
 
 from app.infrastructure.external.gemini_client import (
-    AIClient,
     MAX_FILE_PATHS_FOR_AI,
     MAX_README_CHARS_FOR_AI,
     PROMPT_VERSION,
+    AIClient,
 )
 
 
@@ -25,7 +25,11 @@ class TestAIClientParsingAndDemo:
             "recruiter": "Python backend service."
           },
           "evidence_refs": [
-            {"claim": "FastAPI app entrypoint", "source_type": "file", "target": "backend/app/main.py"}
+            {
+              "claim": "FastAPI app entrypoint",
+              "source_type": "file",
+              "target": "backend/app/main.py"
+            }
           ]
         }
         ```"""
@@ -49,13 +53,21 @@ class TestAIClientParsingAndDemo:
 
     @pytest.mark.asyncio
     async def test_demo_mode_without_keys_includes_disclosure_and_metadata(self, monkeypatch):
-        monkeypatch.setattr("app.infrastructure.external.gemini_client.get_settings", lambda: type("S", (), {
-            "tokenharbor_api_key": "",
-            "tokenharbor_base_url": "https://api.tokenharbor.ai/v1",
-            "tokenharbor_model": "glm-5.3-flash",
-            "gemini_api_key": "",
-            "gemini_model": "gemini-1.5-flash",
-        })())
+        settings = type(
+            "S",
+            (),
+            {
+                "tokenharbor_api_key": "",
+                "tokenharbor_base_url": "https://api.tokenharbor.ai/v1",
+                "tokenharbor_model": "glm-5.3-flash",
+                "gemini_api_key": "",
+                "gemini_model": "gemini-1.5-flash",
+            },
+        )()
+        monkeypatch.setattr(
+            "app.infrastructure.external.gemini_client.get_settings",
+            lambda: settings,
+        )
         client = AIClient()
         long_paths = [f"src/file_{i}.py" for i in range(MAX_FILE_PATHS_FOR_AI + 50)]
         long_readme = "# Install\n" + ("a" * (MAX_README_CHARS_FOR_AI + 500))

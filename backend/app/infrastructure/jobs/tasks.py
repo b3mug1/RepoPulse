@@ -152,7 +152,6 @@ async def _analyze(analysis_id: str, owner: str, name: str, session: Session) ->
     shas = [c.get("sha", "") for c in commits_list[:100] if c.get("sha")]
 
     # Fetch in batches of 10 concurrently
-    import asyncio
     BATCH_SIZE = 10
     for i in range(0, len(shas), BATCH_SIZE):
         _set_progress(session, analysis_id, f"Loading commit details ({min(i + BATCH_SIZE, len(shas))}/{len(shas)})")

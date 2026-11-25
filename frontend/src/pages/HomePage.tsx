@@ -15,11 +15,10 @@ export default function HomePage() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [savedRepos, setSavedRepos] = useState<string[]>([]);
+  const [savedRepos] = useState<string[]>(() => getSavedRepos());
   const [recentAnalyses, setRecentAnalyses] = useState<GlobalHistoryItem[]>([]);
 
   useEffect(() => {
-    setSavedRepos(getSavedRepos());
     getAllAnalysisHistory({ limit: 4, sort_by: 'created_at', sort_order: 'desc' })
       .then((res) => setRecentAnalyses(res.items))
       .catch(() => {});

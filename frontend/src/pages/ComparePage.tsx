@@ -27,8 +27,8 @@ export default function ComparePage() {
     getAllAnalysisHistory({ status: 'completed', limit: 50, sort_by: 'created_at', sort_order: 'desc' })
       .then((res) => {
         setOptions(res.items);
-        if (!leftId && res.items.length >= 2) setLeftId(res.items[1].id);
-        if (!rightId && res.items.length >= 1) setRightId(res.items[0].id);
+        setLeftId((prev) => prev || (res.items.length >= 2 ? res.items[1].id : ''));
+        setRightId((prev) => prev || (res.items.length >= 1 ? res.items[0].id : ''));
       })
       .catch(() => setError('Could not load completed analyses for comparison.'));
   }, []);
@@ -45,7 +45,7 @@ export default function ComparePage() {
       .then(setComparison)
       .catch(() => setError('Could not compare the selected analyses.'))
       .finally(() => setLoading(false));
-  }, [leftId, rightId]);
+  }, [leftId, rightId, setSearchParams]);
 
   return (
     <div className="analysis-page">
