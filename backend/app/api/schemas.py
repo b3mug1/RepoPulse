@@ -31,9 +31,11 @@ class AnalyzeRequest(BaseModel):
             raise ValueError("owner and name must not be blank")
         if "/" in v or "\\" in v:
             raise ValueError("Use separate owner and name fields, not owner/name")
+        if v in {".", ".."} or v.startswith(".") or v.endswith(".") or ".." in v:
+            raise ValueError("Invalid GitHub owner or repository name")
         if not re.fullmatch(r"[A-Za-z0-9._-]+", v):
             raise ValueError("Use only letters, numbers, dots, underscores, and hyphen")
-        return v
+        return v[:-4] if v.endswith(".git") and len(v) > 4 else v
 
 
 class PaginationParams(BaseModel):
