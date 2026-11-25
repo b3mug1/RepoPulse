@@ -5,10 +5,28 @@ Domain services — pure business logic that doesn't belong to a single entity.
 from __future__ import annotations
 
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Sequence
 
 from app.domain.entities import CommitStats, Contributor
+
+HEALTH_FORMULA_VERSION = "1.1"
+
+
+def to_utc(dt: datetime) -> datetime:
+    """Normalize a datetime to timezone-aware UTC."""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def calculate_health_confidence(coverage: int, sampled_commit_count: int) -> str:
+    """Estimate confidence level of Health Score from signal coverage and sample size."""
+    if coverage >= 80 and sampled_commit_count >= 20:
+        return "high"
+    if coverage >= 45 and sampled_commit_count >= 5:
+        return "medium"
+    return "low"
 
 
 def calculate_bus_factor(contributors: Sequence[Contributor], threshold: float = 0.8) -> int:
@@ -58,7 +76,7 @@ def compute_avg_time_between_commits(commits: Sequence[CommitStats]) -> float:
     if len(commits) < 2:
         return 0.0
 
-    sorted_dates = sorted(c.committed_at for c in commits)
+    sorted_dates = sorted(to_utc(c.committed_at) for c in commits)
     deltas = [
         (sorted_dates[i + 1] - sorted_dates[i]).total_seconds() / 3600
         for i in range(len(sorted_dates) - 1)
@@ -67,25 +85,33 @@ def compute_avg_time_between_commits(commits: Sequence[CommitStats]) -> float:
 
 
 def compute_commits_per_day(commits: Sequence[CommitStats]) -> float:
-    """Average commits per calendar day over the repo's active window."""
-    if not commits:
+    """Average commits per day over the sampled window (min 1-day denominator).
+
+    Returns 0.0 when fewer than 2 commits are available so a single commit
+    is not extrapolated into a daily rate.
+    """
+    if len(commits) < 2:
         return 0.0
-    dates = [c.committed_at for c in commits]
+    dates = [to_utc(c.committed_at) for c in commits]
     span_days = max((max(dates) - min(dates)).total_seconds() / 86_400, 1)
     return round(len(commits) / span_days, 2)
 
 
 def compute_commits_per_month(commits: Sequence[CommitStats]) -> float:
-    """Estimate commits per 30 days across the sampled commit date range."""
+    """Estimate commits per 30 days across the sampled commit date range.
+
+    Short histories (< 30 days) use a 30-day floor so brief bursts are not
+    extrapolated into inflated monthly rates. Returns 0.0 for < 2 commits.
+    """
     if len(commits) < 2:
         return 0.0
-    dates = [c.committed_at for c in commits]
+    dates = [to_utc(c.committed_at) for c in commits]
     observed_days = (max(dates) - min(dates)).total_seconds() / 86_400
     return round(len(commits) * 30 / max(observed_days, 30), 2)
 
 
 def aggregate_contributors(commits: Sequence[CommitStats], analysis_id) -> list[Contributor]:
-    """Build contributor summary from raw commit data."""
+    """Build contributor summary from raw commit data using a stable author key."""
     from collections import defaultdict
     import uuid
 
@@ -97,19 +123,27 @@ def aggregate_contributors(commits: Sequence[CommitStats], analysis_id) -> list[
     })
 
     for c in commits:
-        # Normalize key to lowercase so "Bekzat" and "bekzat" merge
-        raw_key = c.author_email or c.author_name
-        key = raw_key.lower() if raw_key else "unknown"
+        login = (c.author_login or "").strip().lower()
+        email = (c.author_email or "").strip().lower()
+        name = (c.author_name or "").strip().lower()
+        if login:
+            key = f"gh:{login}"
+        elif email:
+            key = f"email:{email}"
+        elif name:
+            key = f"name:{name}"
+        else:
+            key = "unknown"
+
         contrib_map[key]["total_commits"] += 1
         contrib_map[key]["additions"] += c.additions
         contrib_map[key]["deletions"] += c.deletions
-        contrib_map[key]["dates"].append(c.committed_at)
-        # Keep the name variant with the most commits (first seen wins, overwritten if same)
+        contrib_map[key]["dates"].append(to_utc(c.committed_at))
         if "name" not in contrib_map[key]:
-            contrib_map[key]["name"] = c.author_name
+            contrib_map[key]["name"] = c.author_login or c.author_name or "unknown"
 
     result: list[Contributor] = []
-    for email, data in contrib_map.items():
+    for _key, data in contrib_map.items():
         dates = sorted(data["dates"])
         result.append(
             Contributor(
@@ -166,12 +200,9 @@ def calculate_repository_health(
 
     if sampled_commit_count >= 2 and latest_commit_at is not None:
         volume_score = min(100, round(max(commits_per_month, 0) / 20 * 100))
-        reference = now or datetime.now(latest_commit_at.tzinfo)
-        if reference.tzinfo is None and latest_commit_at.tzinfo is not None:
-            reference = reference.replace(tzinfo=latest_commit_at.tzinfo)
-        elif reference.tzinfo is not None and latest_commit_at.tzinfo is None:
-            latest_commit_at = latest_commit_at.replace(tzinfo=reference.tzinfo)
-        age_days = max((reference - latest_commit_at).total_seconds() / 86_400, 0)
+        latest_utc = to_utc(latest_commit_at)
+        reference = to_utc(now) if now is not None else datetime.now(timezone.utc)
+        age_days = max((reference - latest_utc).total_seconds() / 86_400, 0)
         recency_score = (
             100 if age_days <= 14 else
             80 if age_days <= 30 else
@@ -211,29 +242,42 @@ def calculate_repository_health(
         add_component("automation", None, "Repository tree could not be inspected, so CI configuration presence is unknown.", "GitHub tree data unavailable.")
     else:
         test_patterns = (
-            "/tests/", "/test/", "/spec/", "/specs/",
+            "/tests/", "/test/", "/spec/", "/specs/", "/__tests__/", "/e2e/", "/integration/",
         )
         test_files = [
             path for path in paths
             if any(pattern in f"/{path}/" for pattern in test_patterns)
-            or path.endswith(("_test.py", ".test.ts", ".test.tsx", ".test.js", ".test.jsx", ".spec.ts", ".spec.tsx", ".spec.js", ".spec.jsx"))
+            or path.endswith((
+                "_test.py", ".test.ts", ".test.tsx", ".test.js", ".test.jsx",
+                ".spec.ts", ".spec.tsx", ".spec.js", ".spec.jsx",
+                "pytest.ini", "jest.config.js", "jest.config.ts", "vitest.config.ts", "vitest.config.js",
+            ))
         ]
         add_component(
             "testing",
-            100 if test_files else 0,
-            "Looks for common test/spec directories and filename conventions; this does not verify that tests pass or provide coverage.",
+            100 if test_files else None,
+            (
+                "Looks for common test/spec directories and filename conventions; this does not verify that tests pass or provide coverage."
+                if test_files
+                else "No common test/spec paths were detected; absence of matching filenames does not prove tests are absent."
+            ),
             f"Detected {len(test_files)} matching test paths among {len(paths)} tree paths." + (f" Examples: {', '.join(test_files[:3])}." if test_files else ""),
         )
 
         ci_patterns = (
             "github/workflows/", "gitlab-ci.yml", "circleci/config.yml",
-            "jenkinsfile", "azure-pipelines.yml", "buildkite.yml", "buildkite/", "bitbucket-pipelines.yml",
+            "jenkinsfile", "azure-pipelines.yml", "buildkite.yml", "buildkite/",
+            "bitbucket-pipelines.yml", ".travis.yml", ".drone.yml", "woodpecker.yml", ".woodpecker/",
         )
         ci_files = [path for path in paths if any(pattern in path for pattern in ci_patterns)]
         add_component(
             "automation",
-            100 if ci_files else 0,
-            "Looks for common CI configuration paths; presence does not mean workflows are enabled or passing.",
+            100 if ci_files else None,
+            (
+                "Looks for common CI configuration paths across multiple providers; presence does not mean workflows are enabled or passing."
+                if ci_files
+                else "No common CI configuration paths were detected; CI may run externally or in a parent monorepo."
+            ),
             f"Detected {len(ci_files)} matching CI paths among {len(paths)} tree paths." + (f" Examples: {', '.join(ci_files[:3])}." if ci_files else ""),
         )
 
@@ -252,18 +296,15 @@ def calculate_repository_health(
     elif contributor_count and bus_factor == 2:
         add("medium", "Ownership concentrated in two contributors", "Two sampled contributors account for at least 80% of sampled commits.")
     testing = components["testing"]
-    if testing["score"] == 0:
-        add("medium", "No common test paths detected", testing["evidence"])
+    if testing["status"] == "unknown" and file_paths is not None:
+        add("low", "No common test paths detected", testing["evidence"])
     automation = components["automation"]
-    if automation["score"] == 0:
+    if automation["status"] == "unknown" and file_paths is not None:
         add("low", "No common CI configuration detected", automation["evidence"])
     if latest_commit_at and sampled_commit_count >= 2:
-        reference = now or datetime.now(latest_commit_at.tzinfo)
-        if reference.tzinfo is None and latest_commit_at.tzinfo is not None:
-            reference = reference.replace(tzinfo=latest_commit_at.tzinfo)
-        elif reference.tzinfo is not None and latest_commit_at.tzinfo is None:
-            latest_commit_at = latest_commit_at.replace(tzinfo=reference.tzinfo)
-        age_days = max((reference - latest_commit_at).total_seconds() / 86_400, 0)
+        latest_utc = to_utc(latest_commit_at)
+        reference = to_utc(now) if now is not None else datetime.now(timezone.utc)
+        age_days = max((reference - latest_utc).total_seconds() / 86_400, 0)
         if age_days > 90:
             add("medium", "Recent activity is limited", f"The latest sampled commit is {age_days:.0f} days old; project activity may happen outside the sampled window.")
     if not findings:

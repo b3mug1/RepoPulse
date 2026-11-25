@@ -80,6 +80,7 @@ class CommitStats:
     sha: str = ""
     author_name: str = ""
     author_email: str = ""
+    author_login: str = ""
     message: str = ""
     additions: int = 0
     deletions: int = 0

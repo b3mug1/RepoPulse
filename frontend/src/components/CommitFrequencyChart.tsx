@@ -8,7 +8,10 @@ interface Props {
 export default function CommitFrequencyChart({ data }: Props) {
   return (
     <div className="glass p-6">
-      <h3 className="text-slate-600 text-sm font-semibold mb-5">Daily Commits</h3>
+      <div className="flex items-baseline justify-between gap-2 mb-5">
+        <h3 className="text-slate-600 text-sm font-semibold">Daily Commits</h3>
+        <span className="text-[11px] text-slate-400">UTC calendar days · sampled commits</span>
+      </div>
       {data.length === 0 ? (
         <p className="text-slate-300 text-sm">No commit data available.</p>
       ) : (

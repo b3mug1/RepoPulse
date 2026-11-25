@@ -28,7 +28,9 @@ export default function RepositoryHealthPanel({ health }: Props) {
               <ShieldCheck className="w-4 h-4 text-indigo-500" /> Repository health
             </h3>
             <p className={`text-sm font-medium mt-1 ${scoreColor}`}>{health.grade}</p>
-            <p className="text-[11px] text-slate-400 mt-1">{health.coverage}% of weighted signals measured</p>
+            <p className="text-[11px] text-slate-400 mt-1">
+              {health.coverage}% of weighted signals measured · Confidence: <span className="capitalize font-medium text-slate-500">{health.confidence}</span>
+            </p>
           </div>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 flex-1">
@@ -41,7 +43,9 @@ export default function RepositoryHealthPanel({ health }: Props) {
               <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
                 {component.score !== null && <div className="h-full bg-gradient-to-r from-indigo-500 to-violet-500" style={{ width: `${component.score}%` }} />}
               </div>
-              <p className="text-[10px] text-slate-400 mt-2">Weight {component.weight}% · {component.status}</p>
+              <p className="text-[10px] text-slate-400 mt-2">
+                Weight {component.weight}% · {component.weighted_points !== null ? `+${component.weighted_points.toFixed(1)} pts` : 'Not counted'}
+              </p>
               <details className="mt-2 text-[10px] text-slate-400">
                 <summary className="cursor-pointer text-indigo-500">How this is measured</summary>
                 <p className="mt-2 leading-relaxed">{component.explanation}</p>

@@ -159,12 +159,14 @@ class GitHubClient:
         """Map a single commit detail response → domain CommitStats entity."""
         commit_info = data.get("commit", {})
         author = commit_info.get("author", {})
+        gh_author = data.get("author") or {}
         stats = data.get("stats", {})
         return CommitStats(
             analysis_id=analysis_id,
             sha=data.get("sha", ""),
             author_name=author.get("name", "unknown"),
             author_email=author.get("email", ""),
+            author_login=gh_author.get("login", "") if isinstance(gh_author, dict) else "",
             message=commit_info.get("message", ""),
             additions=stats.get("additions", 0),
             deletions=stats.get("deletions", 0),

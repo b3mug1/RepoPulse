@@ -30,6 +30,7 @@ def _make_commit(
     deletions: int = 5,
     author_name: str = "Alice",
     author_email: str = "alice@example.com",
+    author_login: str = "",
     committed_at: datetime | None = None,
 ) -> CommitStats:
     return CommitStats(
@@ -38,6 +39,7 @@ def _make_commit(
         sha="abc123",
         author_name=author_name,
         author_email=author_email,
+        author_login=author_login,
         message="test commit",
         additions=additions,
         deletions=deletions,
@@ -216,6 +218,25 @@ class TestRepositoryHealth:
         assert components["automation"]["score"] == 100
         assert "test_api.py" in components["testing"]["evidence"]
 
+    def test_absent_test_and_ci_paths_are_unknown_not_zero(self):
+        score, components, findings, coverage = calculate_repository_health(
+            commits_per_month=5,
+            sampled_commit_count=4,
+            bus_factor=3,
+            contributor_count=5,
+            readme_score=8,
+            file_paths=["src/app.ts", "README.md"],
+            latest_commit_at=datetime(2025, 6, 20, tzinfo=timezone.utc),
+            now=datetime(2025, 6, 21, tzinfo=timezone.utc),
+        )
+        assert score is not None
+        assert coverage == 65  # activity 25 + collaboration 20 + documentation 20
+        assert components["testing"]["score"] is None
+        assert components["testing"]["status"] == "unknown"
+        assert components["automation"]["score"] is None
+        assert components["automation"]["status"] == "unknown"
+        assert any(f["severity"] == "low" and "test paths" in f["title"].lower() for f in findings)
+
 
 # ── Aggregate Contributors ──────────────────────────────────────────────────
 
@@ -232,3 +253,25 @@ class TestAggregateContributors:
         assert len(result) == 2
         alice = next(c for c in result if c.username == "Alice")
         assert alice.total_commits == 2
+
+    def test_groups_multiple_emails_by_stable_github_login(self):
+        aid = uuid.uuid4()
+        commits = [
+            _make_commit(author_name="Alice", author_email="alice@work.com", author_login="alice-gh"),
+            _make_commit(author_name="Alice M.", author_email="alice@personal.com", author_login="alice-gh"),
+            _make_commit(author_name="Bob", author_email="bob@x.com", author_login="bob-gh"),
+        ]
+        result = aggregate_contributors(commits, aid)
+        assert len(result) == 2
+        alice = next(c for c in result if c.username == "alice-gh")
+        assert alice.total_commits == 2
+
+    def test_short_history_and_mixed_timezones(self):
+        assert compute_commits_per_day([_make_commit()]) == 0.0
+        tz_plus5 = timezone(timedelta(hours=5))
+        commits = [
+            _make_commit(committed_at=datetime(2025, 6, 1, 10, 0, tzinfo=timezone.utc)),
+            _make_commit(committed_at=datetime(2025, 6, 3, 15, 0, tzinfo=tz_plus5)),
+        ]
+        # 2025-06-03 15:00+05:00 == 2025-06-03 10:00 UTC -> exactly 2.0 days
+        assert compute_commits_per_day(commits) == 1.0

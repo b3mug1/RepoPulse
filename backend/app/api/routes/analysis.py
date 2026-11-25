@@ -32,6 +32,11 @@ from app.api.schemas import (
     ErrorResponse,
     MetricsOut,
 )
+from app.domain.services import (
+    HEALTH_FORMULA_VERSION,
+    calculate_health_confidence,
+    to_utc,
+)
 from app.usecases.analyze_repository import AnalyzeRepoRequest, AnalyzeRepositoryUseCase
 from app.usecases.get_analysis import GetAnalysisUseCase, ListAnalysesUseCase
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -91,14 +96,15 @@ async def get_analysis(
     contributors = data["contributors"]
     commits = data["commits"]
 
-    # Compute daily commit counts from stored commit timestamps
-    date_counts = Counter(
-        c.committed_at.date().isoformat() for c in commits if c.committed_at
-    )
+    # Compute daily commit counts from stored commit timestamps normalized to UTC
+    utc_dates = [to_utc(c.committed_at) for c in commits if c.committed_at]
+    date_counts = Counter(dt.date().isoformat() for dt in utc_dates)
     commits_per_date = sorted(
         [DailyCommit(date=d, commits=n) for d, n in date_counts.items()],
         key=lambda x: x.date,
     )
+    sampled_count = data["commits_count"]
+    confidence = calculate_health_confidence(analysis.health_coverage, analysis.total_commits)
 
     return AnalysisDetailOut(
         id=analysis.id,
@@ -108,10 +114,20 @@ async def get_analysis(
         health={
             "score": analysis.health_score if analysis.health_coverage else None,
             "coverage": analysis.health_coverage,
+            "confidence": confidence,
             "grade": "Insufficient data" if not analysis.health_coverage else "Excellent" if analysis.health_score >= 80 else "Healthy" if analysis.health_score >= 60 else "Needs attention" if analysis.health_score >= 40 else "At risk",
-            "formula_version": "1.0",
+            "formula_version": HEALTH_FORMULA_VERSION,
             "breakdown": analysis.health_breakdown,
             "findings": analysis.health_findings,
+        },
+        sample_scope={
+            "sampled_commits": sampled_count,
+            "max_commits_limit": 100,
+            "max_pages_limit": 5,
+            "is_truncated": sampled_count >= 100,
+            "window_start_at": min(utc_dates) if utc_dates else None,
+            "window_end_at": max(utc_dates) if utc_dates else None,
+            "timezone": "UTC",
         },
         error_message=analysis.error_message,
         metrics=MetricsOut(
@@ -241,7 +257,7 @@ async def export_analysis_csv(
     ):
         writer.writerow(["metrics", name, getattr(analysis, name)])
     writer.writerow(["health", "coverage_percent", analysis.health_coverage])
-    writer.writerow(["health", "formula_version", "1.0"])
+    writer.writerow(["health", "formula_version", HEALTH_FORMULA_VERSION])
     for name, value in analysis.health_breakdown.items():
         writer.writerow(["health_breakdown", name, value.get("score") if isinstance(value, dict) else value])
         if isinstance(value, dict):

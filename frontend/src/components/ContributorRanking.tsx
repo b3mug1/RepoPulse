@@ -10,10 +10,13 @@ export default function ContributorRanking({ contributors }: Props) {
 
   return (
     <div className="glass p-6">
-      <h3 className="text-slate-600 text-sm font-semibold mb-5">
+      <h3 className="text-slate-600 text-sm font-semibold mb-1">
         Contributors
         <span className="text-slate-300 ml-2 font-normal">{contributors.length}</span>
       </h3>
+      <p className="text-[11px] text-slate-400 mb-5">
+        Based on sampled commits only; commit counts reflect activity volume, not individual developer performance.
+      </p>
       <div className="space-y-3.5">
         {sorted.slice(0, 15).map((c, index) => (
           <div key={c.username + index} className="flex items-center gap-3">

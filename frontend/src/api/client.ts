@@ -60,6 +60,7 @@ export interface AnalysisDetail {
   health: {
     score: number | null;
     coverage: number;
+    confidence: string;
     grade: string;
     formula_version: string;
     breakdown: Record<string, {
@@ -72,6 +73,15 @@ export interface AnalysisDetail {
       evidence: string;
     }>;
     findings: { severity: string; title: string; detail: string }[];
+  };
+  sample_scope: {
+    sampled_commits: number;
+    max_commits_limit: number;
+    max_pages_limit: number;
+    is_truncated: boolean;
+    window_start_at: string | null;
+    window_end_at: string | null;
+    timezone: string;
   };
   error_message: string | null;
   metrics: Metrics;

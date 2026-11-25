@@ -81,7 +81,19 @@ export default function AnalysisPage() {
   return <div className="analysis-page">
     <Link to="/" className="analysis-topline"><ArrowLeft size={14} /> REPOPULSE <span>/</span> REPOSITORY REPORT</Link>
     <section className="analysis-head analysis-section">
-      <div><span className="analysis-overline">PROJECT INTELLIGENCE · {analysis.id.slice(0, 8).toUpperCase()}</span><h1>Repository report</h1><p>{analysis.commits_count.toLocaleString()} commits analyzed <span className="report-sep">·</span> {analysis.completed_at ? new Date(analysis.completed_at).toLocaleString() : 'Just now'}</p></div>
+      <div>
+        <span className="analysis-overline">PROJECT INTELLIGENCE · {analysis.id.slice(0, 8).toUpperCase()}</span>
+        <h1>Repository report</h1>
+        <p>
+          {analysis.sample_scope.sampled_commits.toLocaleString()} sampled commits
+          {analysis.sample_scope.is_truncated ? ` (capped at latest ${analysis.sample_scope.max_commits_limit} / ${analysis.sample_scope.max_pages_limit} pages)` : ''}
+          {analysis.sample_scope.window_start_at && analysis.sample_scope.window_end_at
+            ? ` · ${new Date(analysis.sample_scope.window_start_at).toLocaleDateString()} – ${new Date(analysis.sample_scope.window_end_at).toLocaleDateString()} (${analysis.sample_scope.timezone})`
+            : ''}
+          <span className="report-sep">·</span>
+          {analysis.completed_at ? new Date(analysis.completed_at).toLocaleString() : 'Just now'}
+        </p>
+      </div>
       <div className="analysis-actions"><a href={`${(import.meta.env.VITE_API_URL || '/api/v1').replace(/\/$/, '')}/analyses/${analysis.id}/export.csv`} className="report-action" download><Download size={14} /> Export CSV</a><button className="report-action" onClick={() => window.print()}><Activity size={14} /> Save report</button></div>
     </section>
     <div className="analysis-section"><RepositoryHealthPanel health={analysis.health} /></div>

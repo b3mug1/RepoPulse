@@ -110,10 +110,21 @@ class HealthComponent(BaseModel):
 class HealthOut(BaseModel):
     score: Optional[int]
     coverage: int
+    confidence: str = "low"
     grade: str
     formula_version: str
     breakdown: dict[str, HealthComponent]
     findings: list[HealthFinding]
+
+
+class SampleScopeOut(BaseModel):
+    sampled_commits: int
+    max_commits_limit: int = 100
+    max_pages_limit: int = 5
+    is_truncated: bool = False
+    window_start_at: Optional[datetime] = None
+    window_end_at: Optional[datetime] = None
+    timezone: str = "UTC"
 
 
 class AIInsightsOut(BaseModel):
@@ -130,6 +141,7 @@ class AnalysisDetailOut(BaseModel):
     status: str
     progress_stage: str
     health: HealthOut
+    sample_scope: SampleScopeOut
     error_message: Optional[str]
     metrics: MetricsOut
     ai_insights: AIInsightsOut
