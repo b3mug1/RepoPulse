@@ -26,6 +26,7 @@ class _FakeSession:
 class TestAPIWithDependencyOverrides:
     async def test_analyze_validation_and_dispatch(self, monkeypatch):
         from app.api.rate_limit import limiter
+
         monkeypatch.setattr(limiter, "enabled", False)
         repo_id = uuid.uuid4()
         analysis_id = uuid.uuid4()
@@ -40,9 +41,7 @@ class TestAPIWithDependencyOverrides:
 
         app.dependency_overrides[get_analyze_use_case] = lambda: FakeAnalyzeUC()
         try:
-            async with AsyncClient(
-                transport=ASGITransport(app=app), base_url="http://test"
-            ) as ac:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
                 bad = await ac.post(
                     "/api/v1/analyses/analyze",
                     json={"owner": "..", "name": "react"},
@@ -151,6 +150,7 @@ class TestMockedPipelineE2E:
         class FakeGH:
             def parse_commit(self, data, analysis_id):
                 from app.infrastructure.external.github_client import GitHubClient
+
                 return GitHubClient(token="dummy").parse_commit(data, analysis_id)
 
             async def get_repository(self, _o, _n):
