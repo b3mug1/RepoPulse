@@ -25,10 +25,10 @@ export default function LanguagePieChart({ distribution }: Props) {
   }
 
   return (
-    <div className="glass p-6">
+    <div className="glass p-6" role="region" aria-label="Programming language distribution chart">
       <h3 className="text-slate-600 text-sm font-semibold mb-5">Languages</h3>
-      <div className="flex items-center gap-6">
-        <div className="flex-shrink-0">
+      <div className="flex flex-col sm:flex-row items-center gap-6">
+        <div className="flex-shrink-0" aria-hidden="true">
           <ResponsiveContainer width={200} height={200}>
             <PieChart>
               <Pie

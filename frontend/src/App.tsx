@@ -8,10 +8,12 @@ const AnalysisPage = lazy(() => import('./pages/AnalysisPage'));
 const HistoryPage = lazy(() => import('./pages/HistoryPage'));
 const ComparePage = lazy(() => import('./pages/ComparePage'));
 import BrandMark from './components/BrandMark';
+import { useLocale } from './i18n';
 
 export default function App() {
   const location = useLocation();
   const [serviceStatus, setServiceStatus] = useState<'checking' | 'ok' | 'degraded'>('checking');
+  const { locale, toggleLocale, t } = useLocale();
 
   useEffect(() => {
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -37,6 +39,7 @@ export default function App() {
 
   return (
     <div className="app-shell min-h-screen">
+      <a href="#main-content" className="skip-link">{t.skipToContent}</a>
       <div className="ambient ambient-one" />
       <div className="ambient ambient-two" />
       <header className="topbar">
@@ -46,15 +49,18 @@ export default function App() {
             <span className="brand-name">repo<span>pulse</span></span>
           </Link>
           <nav className="topbar-nav" aria-label="Main navigation">
-            <Link to="/history" className="nav-link">History</Link>
-            <Link to="/compare" className="nav-link">Compare</Link>
-            <a href="https://github.com/b3mug1/github_repo_analyzer" target="_blank" rel="noreferrer" className="nav-link"><Github size={15} /> Open source <ArrowUpRight size={13} /></a>
+            <Link to="/history" className="nav-link">{t.history}</Link>
+            <Link to="/compare" className="nav-link">{t.compare}</Link>
+            <a href="https://github.com/b3mug1/github_repo_analyzer" target="_blank" rel="noreferrer" className="nav-link"><Github size={15} /> {t.openSource} <ArrowUpRight size={13} /></a>
+            <button type="button" onClick={toggleLocale} className="nav-link" aria-label="Switch interface language">
+              {locale.toUpperCase()}
+            </button>
             <span className="nav-divider" />
-            <span className={`status-pill ${serviceStatus}`} role="status" aria-live="polite"><i /> {serviceStatus === 'ok' ? 'Systems operational' : serviceStatus === 'degraded' ? 'Systems degraded' : 'Checking systems'}</span>
+            <span className={`status-pill ${serviceStatus}`} role="status" aria-live="polite"><i /> {serviceStatus === 'ok' ? t.systemsOk : serviceStatus === 'degraded' ? t.systemsDegraded : t.systemsChecking}</span>
           </nav>
         </div>
       </header>
-      <main className="page-shell">
+      <main id="main-content" className="page-shell">
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/history" element={<Suspense fallback={<div className="analysis-page loading-copy">Loading history…</div>}><HistoryPage /></Suspense>} />

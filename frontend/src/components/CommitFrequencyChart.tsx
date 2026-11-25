@@ -7,7 +7,7 @@ interface Props {
 
 export default function CommitFrequencyChart({ data }: Props) {
   return (
-    <div className="glass p-6">
+    <div className="glass p-6" role="region" aria-label="Daily commit frequency chart in UTC">
       <div className="flex items-baseline justify-between gap-2 mb-5">
         <h3 className="text-slate-600 text-sm font-semibold">Daily Commits</h3>
         <span className="text-[11px] text-slate-400">UTC calendar days · sampled commits</span>
@@ -15,7 +15,8 @@ export default function CommitFrequencyChart({ data }: Props) {
       {data.length === 0 ? (
         <p className="text-slate-300 text-sm">No commit data available.</p>
       ) : (
-        <ResponsiveContainer width="100%" height={280}>
+        <div aria-hidden="true">
+          <ResponsiveContainer width="100%" height={280}>
           <BarChart data={data}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.04)" />
             <XAxis
@@ -51,6 +52,7 @@ export default function CommitFrequencyChart({ data }: Props) {
             <Bar dataKey="commits" fill="rgba(99,102,241,0.65)" radius={[6, 6, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
+        </div>
       )}
     </div>
   );
