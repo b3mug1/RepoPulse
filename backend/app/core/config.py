@@ -50,17 +50,26 @@ class Settings(BaseSettings):
     tokenharbor_model: str = "glm-5.3-flash"
 
     rate_limit_per_minute: int = 30
+    trusted_proxies: str = ""
+    max_request_body_bytes: int = 65536
     cors_origins: str = "http://localhost:4200,http://localhost:5173"
 
     def validate_production(self) -> None:
         if self.app_env != "production":
             return
-        missing = []
-        if len(self.app_secret_key) < 32:
-            missing.append("APP_SECRET_KEY")
-        if missing:
+        errors: list[str] = []
+        insecure_placeholders = {"change-me", "change-me-in-production", "analyzer_secret", "secret", "default"}
+        if len(self.app_secret_key) < 32 or self.app_secret_key.lower() in insecure_placeholders:
+            errors.append("APP_SECRET_KEY (>= 32 chars, non-default)")
+        if not self.postgres_password or self.postgres_password.lower() in insecure_placeholders:
+            errors.append("POSTGRES_PASSWORD (non-default)")
+        if self.app_debug:
+            errors.append("APP_DEBUG must be false")
+        if "*" in [o.strip() for o in self.cors_origins.split(",")]:
+            errors.append("CORS_ORIGINS must not contain '*'")
+        if errors:
             raise RuntimeError(
-                "Production requires a secure configuration: " + ", ".join(missing)
+                "Production requires a secure configuration: " + ", ".join(errors)
             )
 
 

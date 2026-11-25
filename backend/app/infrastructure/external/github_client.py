@@ -22,9 +22,11 @@ GITHUB_API = "https://api.github.com"
 class GitHubClient:
     """Thin async wrapper around GitHub REST API v3."""
 
-    def __init__(self, token: str | None = None) -> None:
+    def __init__(self, token: str | None = None, *, max_requests: int = 150) -> None:
         settings = get_settings()
         self._token = token or settings.github_token
+        self._max_requests = max_requests
+        self._request_count = 0
         self._headers: dict[str, str] = {
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
@@ -43,10 +45,13 @@ class GitHubClient:
     async def _get(
         self, url: str, params: dict | None = None, *, etag: str | None = None
     ) -> httpx.Response:
+        if self._request_count >= self._max_requests:
+            raise ExternalServiceError("GitHub", "GitHub API request budget exceeded for this analysis")
+        self._request_count += 1
         headers = dict(self._headers)
         if etag:
             headers["If-None-Match"] = etag
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=5.0)) as client:
             resp = await client.get(url, headers=headers, params=params)
             if resp.status_code == 304:
                 return resp

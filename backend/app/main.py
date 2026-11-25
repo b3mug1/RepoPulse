@@ -49,10 +49,21 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_headers=["Content-Type", "Authorization"],
     )
+
+    @app.middleware("http")
+    async def limit_request_size(request: Request, call_next):
+        content_length = request.headers.get("content-length")
+        if content_length and content_length.isdigit():
+            if int(content_length) > settings.max_request_body_bytes:
+                return JSONResponse(
+                    status_code=413,
+                    content={"error": "Request body too large", "code": "PAYLOAD_TOO_LARGE"},
+                )
+        return await call_next(request)
 
     # Rate limiter
     app.state.limiter = limiter
