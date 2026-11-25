@@ -1,0 +1,133 @@
+name: PR Tests
+
+on:
+  pull_request:
+    branches: [master]
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  ruff-lint:
+    name: Ruff lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install ruff
+      - run: ruff check tests/unit/test_ai_client.py tests/unit/test_api_and_pipeline.py tests/unit/test_migrations.py tests/unit/test_security.py
+
+  ruff-format:
+    name: Ruff format (check only)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install ruff
+      - run: ruff format --check tests/unit/test_ai_client.py tests/unit/test_api_and_pipeline.py tests/unit/test_migrations.py tests/unit/test_security.py
+
+  pytest-unit:
+    name: Pytest unit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -e ".[dev]"
+      - run: pytest tests/unit -k "not test_api_and_pipeline" -v --tb=short
+
+  pytest-api:
+    name: Pytest API
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -e ".[dev]"
+      - run: pytest tests/unit/test_api_and_pipeline.py -v --tb=short
+
+  pytest-integration:
+    name: Pytest integration
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: analyzer
+          POSTGRES_PASSWORD: analyzer_secret
+          POSTGRES_DB: github_analyzer
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U analyzer"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: analyzer
+      POSTGRES_PASSWORD: analyzer_secret
+      POSTGRES_DB: github_analyzer
+      REDIS_URL: redis://localhost:6379/0
+      CELERY_BROKER_URL: redis://localhost:6379/1
+      CELERY_RESULT_BACKEND: redis://localhost:6379/2
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GEMINI_API_KEY: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -e ".[dev]"
+      - run: alembic upgrade head
+      - run: |
+          python -c "import psycopg2; conn = psycopg2.connect('postgresql://analyzer:analyzer_secret@localhost:5432/github_analyzer'); conn.autocommit = True; conn.cursor().execute('CREATE DATABASE github_analyzer_test')"
+      - run: pytest tests/integration -v --tb=short
+
+  frontend-checks:
+    name: Frontend checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
