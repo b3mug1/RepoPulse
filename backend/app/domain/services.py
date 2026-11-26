@@ -27,6 +27,37 @@ def to_utc(dt: datetime) -> datetime:
     return dt.astimezone(timezone.utc)
 
 
+def resolve_legacy_health_score(
+    health_score: int | None,
+    health_coverage: int,
+    health_breakdown: dict | None,
+) -> tuple[int | None, int]:
+    """Return (score, coverage), reconstructing legacy v1.0 scores if coverage is 0."""
+    if health_coverage:
+        return health_score, health_coverage
+    if not health_breakdown:
+        return None, 0
+
+    measured_weight = 0
+    weighted_sum = 0.0
+    for key, val in health_breakdown.items():
+        if isinstance(val, dict):
+            score_val = val.get("score")
+            weight = val.get("weight", 0)
+        elif isinstance(val, (int, float)):
+            score_val = int(val)
+            weight = HEALTH_WEIGHTS.get(str(key), 0)
+        else:
+            continue
+        if score_val is not None and weight > 0:
+            measured_weight += weight
+            weighted_sum += score_val * weight / 100
+
+    if measured_weight > 0:
+        return round(weighted_sum * 100 / measured_weight), measured_weight
+    return None, 0
+
+
 def calculate_health_confidence(coverage: int, sampled_commit_count: int) -> str:
     """Estimate confidence level of Health Score from signal coverage and sample size."""
     if coverage >= 80 and sampled_commit_count >= 20:

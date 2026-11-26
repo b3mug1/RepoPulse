@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas import ExploreRepoOut
+from app.domain.services import resolve_legacy_health_score
 from app.infrastructure.database.models import AnalysisModel, RepositoryModel
 from app.infrastructure.database.session import get_db
 
@@ -117,7 +118,11 @@ async def get_repo_health_badge(
     score: int | None = None
     if repo_id is not None:
         analysis_stmt = (
-            select(AnalysisModel.health_score, AnalysisModel.health_coverage)
+            select(
+                AnalysisModel.health_score,
+                AnalysisModel.health_coverage,
+                AnalysisModel.health_breakdown,
+            )
             .where(
                 AnalysisModel.repository_id == repo_id,
                 AnalysisModel.status == "completed",
@@ -126,8 +131,11 @@ async def get_repo_health_badge(
             .limit(1)
         )
         row = (await session.execute(analysis_stmt)).first()
-        if row and row[1]:
-            score = row[0]
+        if row:
+            breakdown = row[2] if len(row) > 2 else None
+            resolved_score, resolved_cov = resolve_legacy_health_score(row[0], row[1], breakdown)
+            if resolved_cov:
+                score = resolved_score
 
     svg = render_health_badge_svg(score)
     return Response(
