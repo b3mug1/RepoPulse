@@ -387,6 +387,10 @@ export const dict = {
       `${commits} sampled commits across ${days} active UTC days`,
     heatmapTooltip: (date: string, count: number) =>
       `${date} (UTC): ${count} commit${count === 1 ? '' : 's'}`,
+    heatmapActiveDays: 'Active days',
+    heatmapPeakDay: 'Peak day',
+    heatmapAvgActive: 'Avg / active day',
+    heatmapWeekdays: ['Mon', 'Wed', 'Fri'] as readonly [string, string, string],
     less: 'Less',
     more: 'More',
     dailyCommitsAria: 'Daily commit frequency chart in UTC',
@@ -790,6 +794,10 @@ export const dict = {
       `${commits} коммитов в выборке за ${days} активных дней (UTC)`,
     heatmapTooltip: (date: string, count: number) =>
       `${date} (UTC): ${count} коммит(ов)`,
+    heatmapActiveDays: 'Активных дней',
+    heatmapPeakDay: 'Пик за день',
+    heatmapAvgActive: 'В среднем в активный день',
+    heatmapWeekdays: ['Пн', 'Ср', 'Пт'] as readonly [string, string, string],
     less: 'Меньше',
     more: 'Больше',
     dailyCommitsAria: 'График частоты коммитов по дням в UTC',
