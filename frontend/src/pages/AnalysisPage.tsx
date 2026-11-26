@@ -16,7 +16,7 @@ import {
   AnalysisHistoryItem,
 } from '../api/client';
 import { useLocale } from '../i18n';
-import { Loader2, AlertCircle, Download, Clock3, ArrowLeft, Activity, RefreshCw, Bookmark, Share2, GitCompare, Check, Copy, Bell } from 'lucide-react';
+import { Loader2, AlertCircle, Download, Clock3, ArrowLeft, Activity, RefreshCw, Bookmark, Share2, GitCompare, Check, Copy, Bell, Info } from 'lucide-react';
 import LanguagePieChart from '../components/LanguagePieChart';
 import ContributorRanking from '../components/ContributorRanking';
 import MetricsGrid from '../components/MetricsGrid';
@@ -217,9 +217,14 @@ export default function AnalysisPage() {
         </p>
       </div>
       {!isSharedMode && (
-        <div className="analysis-actions flex-wrap">
+        <div className="analysis-actions flex-wrap justify-end">
           {analysis.repository_owner && analysis.repository_name && (
-            <button type="button" className="report-action" onClick={handleReanalyze} disabled={reanalyzing}>
+            <button
+              type="button"
+              className="report-action border-[#cbff60]/40 bg-[#cbff60]/10 text-[#cbff60] hover:bg-[#cbff60]/15"
+              onClick={handleReanalyze}
+              disabled={reanalyzing}
+            >
               <RefreshCw size={14} className={reanalyzing ? 'spin' : ''} /> {t.reAnalyze}
             </button>
           )}
@@ -257,29 +262,9 @@ export default function AnalysisPage() {
             <Share2 size={14} /> {t.shareLabel}
           </button>
           {analysis.repository_owner && analysis.repository_name && (
-            <>
-              <button type="button" className="report-action" onClick={() => setBadgeOpen((v) => !v)}>
-                {t.badgeLabel}
-              </button>
-              <button
-                type="button"
-                className="report-action"
-                onClick={async () => {
-                  try {
-                    await subscribeWatchlist({
-                      owner: analysis.repository_owner,
-                      name: analysis.repository_name,
-                      cadence: 'weekly',
-                    });
-                    navigate('/watchlist');
-                  } catch {
-                    setError(t.watchlistAddError);
-                  }
-                }}
-              >
-                <Bell size={14} /> {t.watchWeekly}
-              </button>
-            </>
+            <button type="button" className="report-action" onClick={() => setBadgeOpen((v) => !v)}>
+              {t.badgeLabel}
+            </button>
           )}
           <a href={`${(import.meta.env.VITE_API_URL || '/api/v1').replace(/\/$/, '')}/analyses/${analysis.id}/export.csv`} className="report-action" download><Download size={14} /> {t.exportCsv}</a>
           <button type="button" className="report-action" onClick={() => window.print()}><Activity size={14} /> {t.pdfPrint}</button>
@@ -349,8 +334,9 @@ export default function AnalysisPage() {
       );
     })()}
     {analysis.health.coverage < 100 && (
-      <div className="glass p-4 mb-5 text-xs text-slate-400" role="status">
-        {t.partialResultPrefix} {analysis.health.coverage}% {t.partialResultSuffix}
+      <div className="flex items-center gap-2.5 px-4 py-2.5 mb-5 rounded-xl border border-amber-400/20 bg-amber-400/5 text-xs text-amber-200/80" role="status">
+        <Info size={14} className="text-amber-400 shrink-0" />
+        <span>{t.partialResultPrefix} {analysis.health.coverage}% {t.partialResultSuffix}</span>
       </div>
     )}
     <div className="analysis-section"><RepositoryHealthPanel health={analysis.health} /></div>

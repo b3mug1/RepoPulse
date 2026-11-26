@@ -119,12 +119,16 @@ export default function ExtendedSignalsPanel({ signals }: Props) {
         )}
 
         {win && (
-          <div className="glass-sm p-4">
-            <div className="flex items-center gap-2 text-slate-600 font-semibold mb-2">
-              <Calendar size={14} className="text-orange-500" /> {t.activityWindowsTitle}
+          <div className="glass-sm p-4 md:col-span-2 lg:col-span-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-center gap-2 text-slate-200 font-semibold">
+              <Calendar size={14} className="text-orange-400" /> {t.activityWindowsTitle}
             </div>
-            <p className="text-slate-500">7d: {win.last_7_days} · 30d: {win.last_30_days} · 90d: {win.last_90_days}</p>
-            <p className="text-slate-400 mt-1">{t.trend30dLabel} {win.trend_30d}</p>
+            <div className="flex flex-wrap items-center gap-3 text-slate-300 tabular-nums">
+              <span className="px-2.5 py-1 rounded-md bg-white/[0.04] border border-white/[0.06]">7d: <strong className="text-slate-100">{win.last_7_days}</strong></span>
+              <span className="px-2.5 py-1 rounded-md bg-white/[0.04] border border-white/[0.06]">30d: <strong className="text-slate-100">{win.last_30_days}</strong></span>
+              <span className="px-2.5 py-1 rounded-md bg-white/[0.04] border border-white/[0.06]">90d: <strong className="text-slate-100">{win.last_90_days}</strong></span>
+              <span className="text-slate-400">{t.trend30dLabel} <strong className="text-slate-200">{win.trend_30d}</strong></span>
+            </div>
           </div>
         )}
       </div>
