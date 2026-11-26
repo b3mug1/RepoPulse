@@ -257,6 +257,11 @@ export async function compareAnalyses(leftId: string, rightId: string): Promise<
   return data;
 }
 
+export async function benchmarkAnalyses(ids: string[]): Promise<AnalysisDetail[]> {
+  const { data } = await api.get('/analyses/benchmark', { params: { ids: ids.join(',') } });
+  return data;
+}
+
 export async function createShareLink(
   analysisId: string,
   payload: { expires_in_hours: number; include_ai_insights: boolean; include_contributors: boolean }

@@ -57,6 +57,8 @@ export default function AnalysisPage() {
   const [shareContributors, setShareContributors] = useState(true);
   const [shareUrl, setShareUrl] = useState('');
   const [copied, setCopied] = useState(false);
+  const [badgeOpen, setBadgeOpen] = useState(false);
+  const [badgeCopied, setBadgeCopied] = useState(false);
 
   useEffect(() => {
     if (!id && !token) return;
@@ -221,6 +223,11 @@ export default function AnalysisPage() {
           <button type="button" className="report-action" onClick={() => setShareOpen((v) => !v)}>
             <Share2 size={14} /> Share
           </button>
+          {analysis.repository_owner && analysis.repository_name && (
+            <button type="button" className="report-action" onClick={() => setBadgeOpen((v) => !v)}>
+              Badge
+            </button>
+          )}
           <a href={`${(import.meta.env.VITE_API_URL || '/api/v1').replace(/\/$/, '')}/analyses/${analysis.id}/export.csv`} className="report-action" download><Download size={14} /> Export CSV</a>
           <button type="button" className="report-action" onClick={() => window.print()}><Activity size={14} /> PDF / Print</button>
         </div>
@@ -261,6 +268,33 @@ export default function AnalysisPage() {
         )}
       </section>
     )}
+    {badgeOpen && !isSharedMode && analysis.repository_owner && analysis.repository_name && (() => {
+      const apiBase = (import.meta.env.VITE_API_URL || `${window.location.origin}/api/v1`).replace(/\/$/, '');
+      const badgeUrl = `${apiBase}/repos/${analysis.repository_owner}/${analysis.repository_name}/badge.svg`;
+      const markdown = `[![RepoPulse](${badgeUrl})](${window.location.origin}/analysis/${analysis.id})`;
+      return (
+        <section className="glass p-5 mb-6 analysis-actions-panel">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">README Health Badge</h3>
+            <img src={badgeUrl} alt={`RepoPulse Health badge for ${analysis.repository_full_name}`} className="h-5" />
+          </div>
+          <div className="flex items-center gap-2">
+            <input readOnly value={markdown} aria-label="Markdown badge snippet" className="glass-sm px-3 py-1.5 text-xs w-full text-slate-700 font-mono" />
+            <button
+              type="button"
+              className="report-action shrink-0"
+              onClick={async () => {
+                await navigator.clipboard.writeText(markdown);
+                setBadgeCopied(true);
+                setTimeout(() => setBadgeCopied(false), 2000);
+              }}
+            >
+              {badgeCopied ? <Check size={14} /> : <Copy size={14} />} {badgeCopied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+        </section>
+      );
+    })()}
     {analysis.health.coverage < 100 && (
       <div className="glass p-4 mb-5 text-xs text-slate-400" role="status">
         Partial result: {analysis.health.coverage}% of weighted Health Score signals were measured. Unavailable signals are excluded rather than scored as zero.

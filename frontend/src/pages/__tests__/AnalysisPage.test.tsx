@@ -101,6 +101,10 @@ describe('AnalysisPage', () => {
       expect(screen.getByText('acme/demo')).toBeInTheDocument();
     });
     expect(screen.getByText('90-Day Activity Heatmap')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^badge$/i }));
+    expect(screen.getByLabelText('Markdown badge snippet')).toHaveValue(
+      '[![RepoPulse](http://localhost:3000/api/v1/repos/acme/demo/badge.svg)](http://localhost:3000/analysis/11111111-1111-1111-1111-111111111111)'
+    );
     const csvLink = screen.getByRole('link', { name: /export csv/i });
     expect(csvLink).toHaveAttribute(
       'href',
