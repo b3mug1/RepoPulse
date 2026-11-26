@@ -104,6 +104,28 @@ def _csv_safe(value: object) -> str:
     return text
 
 
+def _normalize_breakdown(raw: dict | None) -> dict[str, dict]:
+    """Normalize legacy integer health_breakdown entries into HealthComponent dicts."""
+    if not raw:
+        return {}
+    normalized: dict[str, dict] = {}
+    for key, val in raw.items():
+        if isinstance(val, dict):
+            normalized[key] = val
+        else:
+            score_val = int(val) if isinstance(val, (int, float)) else None
+            normalized[key] = {
+                "label": str(key).replace("_", " ").title(),
+                "score": score_val,
+                "weight": 0,
+                "weighted_points": None,
+                "status": "legacy" if score_val is not None else "unknown",
+                "explanation": "Legacy score breakdown from an earlier RepoPulse scan.",
+                "evidence": "Re-run analysis for full component evidence.",
+            }
+    return normalized
+
+
 def _build_analysis_detail(
     data: dict,
     repository: RepositoryModel | None,
@@ -138,8 +160,8 @@ def _build_analysis_detail(
             "confidence": confidence,
             "grade": "Insufficient data" if not analysis.health_coverage else "Excellent" if analysis.health_score >= 80 else "Healthy" if analysis.health_score >= 60 else "Needs attention" if analysis.health_score >= 40 else "At risk",
             "formula_version": HEALTH_FORMULA_VERSION,
-            "breakdown": analysis.health_breakdown,
-            "findings": analysis.health_findings,
+            "breakdown": _normalize_breakdown(analysis.health_breakdown),
+            "findings": analysis.health_findings or [],
         },
         sample_scope={
             "sampled_commits": sampled_count,
