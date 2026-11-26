@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -221,6 +221,48 @@ class ShareLinkOut(BaseModel):
     include_ai_insights: bool
     include_contributors: bool
     revoked: bool = False
+
+
+class WatchlistCreateRequest(BaseModel):
+    owner: str = Field(..., min_length=1, max_length=255)
+    name: str = Field(..., min_length=1, max_length=255)
+    cadence: Literal["daily", "weekly"] = "weekly"
+    webhook_url: Optional[str] = Field(None, max_length=512)
+
+    @field_validator("owner", "name")
+    @classmethod
+    def validate_repo_part(cls, v: str) -> str:
+        return AnalyzeRequest.no_slashes(v)
+
+    @field_validator("webhook_url")
+    @classmethod
+    def validate_webhook(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or not v.strip():
+            return None
+        cleaned = v.strip()
+        if not cleaned.startswith("https://"):
+            raise ValueError("Webhook URL must use https://")
+        return cleaned
+
+
+class WatchlistAlertOut(BaseModel):
+    severity: str
+    title: str
+    detail: str
+
+
+class WatchlistItemOut(BaseModel):
+    id: uuid.UUID
+    repository_id: uuid.UUID
+    repository_full_name: str
+    cadence: str
+    has_webhook: bool
+    is_active: bool
+    last_checked_at: Optional[datetime]
+    next_check_at: datetime
+    last_analysis_id: Optional[uuid.UUID]
+    last_alerts: list[WatchlistAlertOut] = Field(default_factory=list)
+    created_at: datetime
 
 
 class HealthResponse(BaseModel):

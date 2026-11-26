@@ -17,6 +17,7 @@ from app.api.rate_limit import limiter
 from app.api.routes.analysis import router as analysis_router
 from app.api.routes.health import router as health_router
 from app.api.routes.repos import router as repos_router
+from app.api.routes.watchlist import router as watchlist_router
 from app.core.config import get_settings
 from app.core.exceptions import AppError, NotFoundError
 from app.core.logging import setup_logging
@@ -91,6 +92,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router, prefix="/api/v1")
     app.include_router(analysis_router, prefix="/api/v1")
     app.include_router(repos_router, prefix="/api/v1")
+    app.include_router(watchlist_router, prefix="/api/v1")
 
     return app
 

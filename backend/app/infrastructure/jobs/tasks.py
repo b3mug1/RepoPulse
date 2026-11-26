@@ -17,10 +17,11 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
+import httpx
 import structlog
-from sqlalchemy import create_engine, delete
+from sqlalchemy import create_engine, delete, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import get_settings
@@ -43,11 +44,14 @@ from app.domain.services import (
     compute_pr_metrics,
     compute_release_metrics,
     compute_security_hygiene,
+    detect_watchlist_alerts,
 )
 from app.infrastructure.database.models import (
     AnalysisModel,
     CommitStatsModel,
     ContributorModel,
+    RepositoryModel,
+    WatchlistModel,
 )
 from app.infrastructure.external.gemini_client import GeminiClient
 from app.infrastructure.external.github_client import GitHubClient
@@ -105,6 +109,7 @@ def run_analysis_task(self, analysis_id: str, owner: str, name: str) -> dict:
         # ── Persist results ──────────────────────────────────
         _save_results(session, analysis_id, result)
         _update_status(session, analysis_id, AnalysisStatus.COMPLETED)
+        _evaluate_watchlist_alerts(session, analysis_id, owner, name)
 
         duration = time.monotonic() - started_at
         metrics.record_analysis(duration_seconds=duration, success=True)
@@ -354,3 +359,92 @@ def _save_results(session: Session, analysis_id: str, result: dict) -> None:
         session.add(model)
 
     session.commit()
+
+
+def _evaluate_watchlist_alerts(session: Session, analysis_id: str, owner: str, name: str) -> None:
+    """Compare completed scan against previous completed scan for watched repos and notify."""
+    aid = uuid.UUID(analysis_id)
+    current = session.get(AnalysisModel, aid)
+    if not current:
+        return
+
+    watch = session.execute(
+        select(WatchlistModel).where(WatchlistModel.repository_id == current.repository_id)
+    ).scalar_one_or_none()
+    if not watch:
+        return
+
+    previous = session.execute(
+        select(AnalysisModel)
+        .where(
+            AnalysisModel.repository_id == current.repository_id,
+            AnalysisModel.status == "completed",
+            AnalysisModel.id != aid,
+        )
+        .order_by(AnalysisModel.created_at.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+
+    alerts: list[dict[str, str]] = []
+    if previous:
+        alerts = detect_watchlist_alerts(
+            {
+                "health_score": previous.health_score,
+                "bus_factor": previous.bus_factor,
+                "extended_signals": previous.extended_signals,
+            },
+            {
+                "health_score": current.health_score,
+                "bus_factor": current.bus_factor,
+                "extended_signals": current.extended_signals,
+            },
+        )
+
+    watch.last_analysis_id = aid
+    watch.last_alerts = alerts
+    session.commit()
+
+    if alerts and watch.webhook_url and watch.webhook_url.startswith("https://"):
+        lines = "\n".join(f"- [{a['severity'].upper()}] {a['title']}: {a['detail']}" for a in alerts)
+        score_label = current.health_score if current.health_score is not None else "N/A"
+        payload = {
+            "text": f"RepoPulse alert for {owner}/{name} (Health: {score_label}):\n{lines}",
+            "repository": f"{owner}/{name}",
+            "analysis_id": analysis_id,
+            "alerts": alerts,
+        }
+        try:
+            httpx.post(watch.webhook_url, json=payload, timeout=5.0)
+        except Exception as exc:
+            logger.warning("Watchlist webhook delivery failed", error=str(exc))
+
+
+@celery_app.task(name="app.infrastructure.jobs.tasks.process_watchlist_scans")
+def process_watchlist_scans() -> dict:
+    """Periodic Celery Beat task: enqueue re-scans for due watchlist repositories."""
+    session = _get_sync_session()
+    dispatched = 0
+    try:
+        now = datetime.now(timezone.utc)
+        due_rows = session.execute(
+            select(WatchlistModel, RepositoryModel)
+            .join(RepositoryModel, WatchlistModel.repository_id == RepositoryModel.id)
+            .where(WatchlistModel.is_active.is_(True), WatchlistModel.next_check_at <= now)
+        ).all()
+
+        for watch, repo in due_rows:
+            analysis = AnalysisModel(repository_id=repo.id, status="pending", progress_stage="queued")
+            session.add(analysis)
+            session.flush()
+            run_analysis_task.apply_async(
+                args=(str(analysis.id), repo.owner, repo.name),
+                task_id=str(analysis.id),
+            )
+            watch.last_checked_at = now
+            watch.next_check_at = now + timedelta(days=1 if watch.cadence == "daily" else 7)
+            dispatched += 1
+
+        session.commit()
+        return {"dispatched": dispatched}
+    finally:
+        session.close()

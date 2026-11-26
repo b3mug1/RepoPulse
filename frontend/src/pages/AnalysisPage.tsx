@@ -10,11 +10,12 @@ import {
   getSharedAnalysis,
   isRepoSaved,
   retryAnalysis,
+  subscribeWatchlist,
   toggleSavedRepo,
   AnalysisDetail,
   AnalysisHistoryItem,
 } from '../api/client';
-import { Loader2, AlertCircle, Download, Clock3, ArrowLeft, Activity, RefreshCw, Bookmark, Share2, GitCompare, Check, Copy } from 'lucide-react';
+import { Loader2, AlertCircle, Download, Clock3, ArrowLeft, Activity, RefreshCw, Bookmark, Share2, GitCompare, Check, Copy, Bell } from 'lucide-react';
 import LanguagePieChart from '../components/LanguagePieChart';
 import ContributorRanking from '../components/ContributorRanking';
 import MetricsGrid from '../components/MetricsGrid';
@@ -59,6 +60,7 @@ export default function AnalysisPage() {
   const [copied, setCopied] = useState(false);
   const [badgeOpen, setBadgeOpen] = useState(false);
   const [badgeCopied, setBadgeCopied] = useState(false);
+  const [watched, setWatched] = useState(false);
 
   useEffect(() => {
     if (!id && !token) return;
@@ -220,13 +222,53 @@ export default function AnalysisPage() {
               <Bookmark size={14} /> {saved ? 'Saved' : 'Save repo'}
             </button>
           )}
+          {analysis.repository_owner && analysis.repository_name && (
+            <button
+              type="button"
+              className="report-action"
+              onClick={async () => {
+                try {
+                  await subscribeWatchlist({
+                    owner: analysis.repository_owner,
+                    name: analysis.repository_name,
+                    cadence: 'weekly',
+                  });
+                  setWatched(true);
+                } catch {
+                  setError('Could not add repository to watchlist.');
+                }
+              }}
+            >
+              <Bell size={14} /> {watched ? 'Watching' : 'Watch'}
+            </button>
+          )}
           <button type="button" className="report-action" onClick={() => setShareOpen((v) => !v)}>
             <Share2 size={14} /> Share
           </button>
           {analysis.repository_owner && analysis.repository_name && (
-            <button type="button" className="report-action" onClick={() => setBadgeOpen((v) => !v)}>
-              Badge
-            </button>
+            <>
+              <button type="button" className="report-action" onClick={() => setBadgeOpen((v) => !v)}>
+                Badge
+              </button>
+              <button
+                type="button"
+                className="report-action"
+                onClick={async () => {
+                  try {
+                    await subscribeWatchlist({
+                      owner: analysis.repository_owner,
+                      name: analysis.repository_name,
+                      cadence: 'weekly',
+                    });
+                    navigate('/watchlist');
+                  } catch {
+                    setError('Could not add repository to watchlist.');
+                  }
+                }}
+              >
+                <Bell size={14} /> Watch weekly
+              </button>
+            </>
           )}
           <a href={`${(import.meta.env.VITE_API_URL || '/api/v1').replace(/\/$/, '')}/analyses/${analysis.id}/export.csv`} className="report-action" download><Download size={14} /> Export CSV</a>
           <button type="button" className="report-action" onClick={() => window.print()}><Activity size={14} /> PDF / Print</button>

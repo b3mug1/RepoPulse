@@ -580,3 +580,36 @@ def compute_activity_windows(commits: Sequence[CommitStats], now: datetime | Non
         "last_90_days": c_90,
         "trend_30d": trend,
     }
+
+
+def detect_watchlist_alerts(prev: dict, curr: dict) -> list[dict[str, str]]:
+    """Detect significant regressions between two completed repository snapshots."""
+    alerts: list[dict[str, str]] = []
+    prev_score = prev.get("health_score")
+    curr_score = curr.get("health_score")
+    if prev_score is not None and curr_score is not None and (prev_score - curr_score) >= 10:
+        alerts.append({
+            "severity": "high",
+            "title": "Health Score dropped",
+            "detail": f"Health Score fell from {prev_score} to {curr_score} (-{prev_score - curr_score} pts).",
+        })
+
+    prev_bf = prev.get("bus_factor", 0)
+    curr_bf = curr.get("bus_factor", 0)
+    if prev_bf >= 2 and curr_bf == 1:
+        alerts.append({
+            "severity": "high",
+            "title": "Bus factor dropped to 1",
+            "detail": f"Sampled bus factor decreased from {prev_bf} to 1.",
+        })
+
+    prev_ci = (prev.get("extended_signals") or {}).get("ci", {}).get("latest_run_conclusion")
+    curr_ci = (curr.get("extended_signals") or {}).get("ci", {}).get("latest_run_conclusion")
+    if prev_ci == "success" and curr_ci in {"failure", "cancelled", "timed_out"}:
+        alerts.append({
+            "severity": "medium",
+            "title": "Latest CI run failed",
+            "detail": f"Latest GitHub Actions conclusion changed from success to {curr_ci}.",
+        })
+
+    return alerts
