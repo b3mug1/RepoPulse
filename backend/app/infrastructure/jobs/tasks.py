@@ -42,6 +42,7 @@ from app.domain.services import (
     compute_issue_metrics,
     compute_pr_metrics,
     compute_release_metrics,
+    compute_security_hygiene,
 )
 from app.infrastructure.database.models import (
     AnalysisModel,
@@ -160,6 +161,18 @@ async def _analyze(analysis_id: str, owner: str, name: str, session: Session) ->
     default_branch = repo_data.get("default_branch", "main") if isinstance(repo_data, dict) else "main"
     branch_protection = await gh.get_branch_protection_status(owner, name, default_branch)
 
+    # Sample PR details & reviews for up to 10 most recent PRs to keep API budget bounded.
+    pr_numbers = [p["number"] for p in pulls[:10] if isinstance(p, dict) and p.get("number")]
+    pr_details: list[dict] = []
+    pr_reviews: dict[int, list[dict]] = {}
+    if pr_numbers and hasattr(gh, "get_pull_request_detail"):
+        detail_results, review_results = await asyncio.gather(
+            asyncio.gather(*(gh.get_pull_request_detail(owner, name, n) for n in pr_numbers)),
+            asyncio.gather(*(gh.get_pull_request_reviews(owner, name, n) for n in pr_numbers)),
+        )
+        pr_details = [d for d in detail_results if isinstance(d, dict)]
+        pr_reviews = {n: r for n, r in zip(pr_numbers, review_results) if isinstance(r, list)}
+
     # Fetch detail for each commit (concurrent batches to avoid rate limits)
     commit_entities: list[CommitStats] = []
     shas = [c.get("sha", "") for c in commits_list[:100] if c.get("sha")]
@@ -235,11 +248,12 @@ async def _analyze(analysis_id: str, owner: str, name: str, session: Session) ->
         ai_results["ai_metadata"] = {"status": "unavailable", "reason": "AI provider unavailable"}
 
     extended_signals = {
-        "pull_requests": compute_pr_metrics(pulls),
+        "pull_requests": compute_pr_metrics(pulls, pr_details=pr_details, pr_reviews=pr_reviews or None),
         "issues": compute_issue_metrics(issues),
-        "releases": compute_release_metrics(releases),
+        "releases": compute_release_metrics(releases, file_paths=file_paths),
         "ci": compute_ci_signals(workflow_runs, file_paths),
         "governance": compute_governance_signals(repo_data if isinstance(repo_data, dict) else {}, file_paths, branch_protection),
+        "security_hygiene": compute_security_hygiene(file_paths),
         "activity_windows": compute_activity_windows(commit_entities),
         "data_refreshed_at": datetime.now(timezone.utc).isoformat(),
     }
