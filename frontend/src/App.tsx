@@ -86,37 +86,43 @@ export default function App() {
             <span className="brand-name">repo<span>pulse</span></span>
           </Link>
           <nav className="topbar-nav" aria-label="Main navigation">
-            <Link to="/history" className="nav-link">{t.history}</Link>
-            <Link to="/compare" className="nav-link">{t.compare}</Link>
-            <Link to="/watchlist" className="nav-link">{t.watchlist}</Link>
-            <a href="https://github.com/b3mug1/github_repo_analyzer" target="_blank" rel="noreferrer" className="nav-link"><Github size={15} /> {t.openSource} <ArrowUpRight size={13} /></a>
+            <Link to="/history" className={`nav-link ${location.pathname === '/history' ? 'active' : ''}`}>{t.history}</Link>
+            <Link to="/compare" className={`nav-link ${location.pathname === '/compare' ? 'active' : ''}`}>{t.compare}</Link>
+            <Link to="/watchlist" className={`nav-link ${location.pathname === '/watchlist' ? 'active' : ''}`}>{t.watchlist}</Link>
+            <a href="https://github.com/b3mug1/RepoPulse" target="_blank" rel="noreferrer" className="nav-link">
+              <Github size={14} /> <span>{t.openSource}</span> <ArrowUpRight size={12} />
+            </a>
+          </nav>
+          <div className="topbar-actions">
+            <span className={`status-pill ${serviceStatus}`} role="status" aria-live="polite" title={serviceStatus === 'ok' ? t.systemsOk : serviceStatus === 'degraded' ? t.systemsDegraded : t.systemsChecking}>
+              <i /> <span className="status-label">{serviceStatus === 'ok' ? t.systemsOk : serviceStatus === 'degraded' ? t.systemsDegraded : t.systemsChecking}</span>
+            </span>
+            <span className="nav-divider" />
+            <button type="button" onClick={toggleLocale} className="nav-chip" aria-label="Switch interface language">
+              {locale.toUpperCase()}
+            </button>
             {user ? (
-              <span className="inline-flex items-center gap-2 text-xs text-slate-700">
+              <div className="user-pill">
                 {user.avatar_url && (
-                  <img src={user.avatar_url} alt={user.username} className="w-5 h-5 rounded-full" />
+                  <img src={user.avatar_url} alt={user.username} className="user-avatar" />
                 )}
-                <span className="font-medium">@{user.username}</span>
+                <span className="user-handle">@{user.username}</span>
                 <button
                   type="button"
                   onClick={() => setStoredAuthToken(null)}
-                  className="nav-link"
+                  className="user-logout"
                   aria-label={t.signOut}
                   title={t.signOut}
                 >
                   <LogOut size={13} />
                 </button>
-              </span>
+              </div>
             ) : (
-              <button type="button" onClick={handleGitHubSignIn} className="nav-link">
-                <Github size={14} /> {t.signInGitHub}
+              <button type="button" onClick={handleGitHubSignIn} className="auth-btn">
+                <Github size={14} /> <span>{t.signInGitHub}</span>
               </button>
             )}
-            <button type="button" onClick={toggleLocale} className="nav-link" aria-label="Switch interface language">
-              {locale.toUpperCase()}
-            </button>
-            <span className="nav-divider" />
-            <span className={`status-pill ${serviceStatus}`} role="status" aria-live="polite"><i /> {serviceStatus === 'ok' ? t.systemsOk : serviceStatus === 'degraded' ? t.systemsDegraded : t.systemsChecking}</span>
-          </nav>
+          </div>
         </div>
       </header>
       <main id="main-content" className="page-shell">
