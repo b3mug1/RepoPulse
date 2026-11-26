@@ -8,6 +8,7 @@ const dict = {
   en: {
     history: 'History',
     compare: 'Compare',
+    watchlist: 'Watchlist',
     openSource: 'Open source',
     systemsOk: 'Systems operational',
     systemsDegraded: 'Systems degraded',
@@ -17,6 +18,7 @@ const dict = {
   ru: {
     history: 'История',
     compare: 'Сравнение',
+    watchlist: 'Мониторинг',
     openSource: 'Открытый код',
     systemsOk: 'Системы работают',
     systemsDegraded: 'Сбой сервисов',

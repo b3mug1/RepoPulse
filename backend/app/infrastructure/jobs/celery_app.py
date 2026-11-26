@@ -29,6 +29,12 @@ celery_app.conf.update(
     task_soft_time_limit=300,           # 5 min soft limit
     task_time_limit=360,                # 6 min hard kill
     result_expires=86400,               # Results expire after 24 h
+    beat_schedule={
+        "process-watchlist-scans-hourly": {
+            "task": "app.infrastructure.jobs.tasks.process_watchlist_scans",
+            "schedule": 3600.0,
+        },
+    },
 )
 
 celery_app.autodiscover_tasks(["app.infrastructure.jobs"])

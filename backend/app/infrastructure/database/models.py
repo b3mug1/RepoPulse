@@ -211,3 +211,27 @@ class ShareLinkModel(Base):
     revoked: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+# ── Watchlist ────────────────────────────────────────────────────────────────
+
+
+class WatchlistModel(Base):
+    __tablename__ = "watchlist"
+    __table_args__ = (
+        Index("ix_watchlist_repo", "repository_id", unique=True),
+        Index("ix_watchlist_next_check", "is_active", "next_check_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    repository_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("repositories.id", ondelete="CASCADE"), nullable=False
+    )
+    cadence: Mapped[str] = mapped_column(String(20), default="weekly", server_default="weekly")
+    webhook_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    next_check_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_analysis_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    last_alerts: Mapped[list] = mapped_column(JSON, default=list, server_default="[]")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

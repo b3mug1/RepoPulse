@@ -281,6 +281,44 @@ export async function createShareLink(
   return data;
 }
 
+export interface WatchlistItem {
+  id: string;
+  repository_id: string;
+  repository_full_name: string;
+  cadence: 'daily' | 'weekly';
+  has_webhook: boolean;
+  is_active: boolean;
+  last_checked_at: string | null;
+  next_check_at: string;
+  last_analysis_id: string | null;
+  last_alerts: { severity: string; title: string; detail: string }[];
+  created_at: string;
+}
+
+export async function getWatchlist(): Promise<WatchlistItem[]> {
+  const { data } = await api.get('/watchlist');
+  return data;
+}
+
+export async function subscribeWatchlist(payload: {
+  owner: string;
+  name: string;
+  cadence: 'daily' | 'weekly';
+  webhook_url?: string;
+}): Promise<WatchlistItem> {
+  const { data } = await api.post('/watchlist', payload);
+  return data;
+}
+
+export async function runWatchlistNow(watchlistId: string): Promise<AnalyzeResponse> {
+  const { data } = await api.post(`/watchlist/${watchlistId}/run`);
+  return data;
+}
+
+export async function unsubscribeWatchlist(watchlistId: string): Promise<void> {
+  await api.delete(`/watchlist/${watchlistId}`);
+}
+
 // ── Saved Repositories (localStorage) ────────────────────────────────────────
 
 const SAVED_REPOS_KEY = 'repopulse_saved_repos';

@@ -7,6 +7,7 @@ import HomePage from './pages/HomePage';
 const AnalysisPage = lazy(() => import('./pages/AnalysisPage'));
 const HistoryPage = lazy(() => import('./pages/HistoryPage'));
 const ComparePage = lazy(() => import('./pages/ComparePage'));
+const WatchlistPage = lazy(() => import('./pages/WatchlistPage'));
 import BrandMark from './components/BrandMark';
 import { useLocale } from './i18n';
 
@@ -51,6 +52,8 @@ export default function App() {
           <nav className="topbar-nav" aria-label="Main navigation">
             <Link to="/history" className="nav-link">{t.history}</Link>
             <Link to="/compare" className="nav-link">{t.compare}</Link>
+            <Link to="/watchlist" className="nav-link">{t.watchlist}</Link>
+            <Link to="/watchlist" className="nav-link">Watchlist</Link>
             <a href="https://github.com/b3mug1/github_repo_analyzer" target="_blank" rel="noreferrer" className="nav-link"><Github size={15} /> {t.openSource} <ArrowUpRight size={13} /></a>
             <button type="button" onClick={toggleLocale} className="nav-link" aria-label="Switch interface language">
               {locale.toUpperCase()}
@@ -65,6 +68,8 @@ export default function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/history" element={<Suspense fallback={<div className="analysis-page loading-copy">Loading history…</div>}><HistoryPage /></Suspense>} />
           <Route path="/compare" element={<Suspense fallback={<div className="analysis-page loading-copy">Loading comparison…</div>}><ComparePage /></Suspense>} />
+          <Route path="/watchlist" element={<Suspense fallback={<div className="analysis-page loading-copy">Loading watchlist…</div>}><WatchlistPage /></Suspense>} />
+          <Route path="/watchlist" element={<Suspense fallback={<div className="analysis-page loading-copy">Loading watchlist…</div>}><WatchlistPage /></Suspense>} />
           <Route path="/analysis/:id" element={<Suspense fallback={<div className="analysis-page loading-copy">Opening report…</div>}><AnalysisPage /></Suspense>} />
           <Route path="/shared/:token" element={<Suspense fallback={<div className="analysis-page loading-copy">Opening shared report…</div>}><AnalysisPage /></Suspense>} />
         </Routes>
