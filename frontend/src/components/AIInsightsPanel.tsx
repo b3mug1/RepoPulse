@@ -9,6 +9,51 @@ interface Props {
 
 type RoleTab = 'developer' | 'manager' | 'recruiter';
 
+function toBulletPoints(text: string, maxItems = 5): string[] {
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+
+  const lines = trimmed
+    .split(/\r?\n+/)
+    .map((line) => line.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, '').trim())
+    .filter(Boolean);
+
+  if (lines.length >= 2) {
+    return lines.slice(0, maxItems);
+  }
+
+  // Legacy single-paragraph prose: split into clean sentences
+  const sentences = trimmed
+    .split(/(?<=[.!?])\s+(?=[A-ZА-ЯЁ0-9])/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  if (sentences.length <= 1) {
+    return [trimmed];
+  }
+  return sentences.slice(0, maxItems);
+}
+
+function BulletList({ text, fallback }: { text: string | null | undefined; fallback: string }) {
+  const items = text ? toBulletPoints(text) : [];
+  if (items.length === 0) {
+    return <p className="text-slate-400 text-sm">{fallback}</p>;
+  }
+  if (items.length === 1) {
+    return <p className="text-slate-300 text-sm leading-relaxed">{items[0]}</p>;
+  }
+  return (
+    <ul className="space-y-2 text-slate-300 text-xs sm:text-[13px] leading-relaxed">
+      {items.map((item, idx) => (
+        <li key={idx} className="flex items-start gap-2.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#cbff60]/80 mt-1.5 shrink-0" />
+          <span>{item}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export default function AIInsightsPanel({ insights }: Props) {
   const { t } = useLocale();
   const [role, setRole] = useState<RoleTab>('developer');
@@ -25,8 +70,8 @@ export default function AIInsightsPanel({ insights }: Props) {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-slate-600 text-sm font-semibold flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-violet-500 opacity-60" />
+        <h3 className="text-slate-200 text-sm font-semibold flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-[#cbff60]" />
           {t.aiInterpretation}
         </h3>
         {meta.model && (
@@ -38,7 +83,7 @@ export default function AIInsightsPanel({ insights }: Props) {
       </div>
 
       {meta.status === 'unavailable' && (
-        <div className="glass p-4 text-xs text-amber-600 flex items-center gap-2">
+        <div className="glass p-4 text-xs text-amber-400 flex items-center gap-2">
           <ShieldAlert size={15} className="shrink-0" />
           <span>{t.aiUnavailableBanner}</span>
         </div>
@@ -47,7 +92,7 @@ export default function AIInsightsPanel({ insights }: Props) {
       {(roleSummaries.developer || roleSummaries.manager || roleSummaries.recruiter) && (
         <div className="glass p-5">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
               {t.audienceSummaryTitle}
             </span>
             <div className="flex gap-1.5" role="tablist" aria-label={t.audienceAriaLabel}>
@@ -58,17 +103,17 @@ export default function AIInsightsPanel({ insights }: Props) {
                   role="tab"
                   aria-selected={role === tab}
                   onClick={() => setRole(tab)}
-                  className={`report-action capitalize ${role === tab ? 'border-indigo-400 text-indigo-500' : ''}`}
+                  className={`report-action capitalize ${role === tab ? 'border-[#cbff60]/60 text-[#cbff60]' : ''}`}
                 >
                   {roleLabels[tab]}
                 </button>
               ))}
             </div>
           </div>
-          <p className="text-slate-600 text-sm leading-relaxed">
+          <p className="text-slate-200 text-sm leading-relaxed">
             {roleSummaries[role] || insights.ai_summary || t.notAvailable}
           </p>
-          <p className="text-[10px] text-slate-400 mt-2">
+          <p className="text-[10px] text-slate-500 mt-2">
             {t.aiDisclaimer}
           </p>
         </div>
@@ -76,43 +121,39 @@ export default function AIInsightsPanel({ insights }: Props) {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="glass p-5">
-          <h4 className="text-slate-500 text-xs font-semibold mb-3 flex items-center gap-2 uppercase tracking-wider">
-            <FileText className="w-3.5 h-3.5 text-indigo-500 opacity-50" />
+          <h4 className="text-slate-400 text-xs font-semibold mb-3 flex items-center gap-2 uppercase tracking-wider">
+            <FileText className="w-3.5 h-3.5 text-indigo-400" />
             {t.summaryTitle}
           </h4>
-          <p className="text-slate-500 text-sm leading-relaxed whitespace-pre-wrap">
-            {insights.ai_summary || t.notAvailable}
-          </p>
+          <BulletList text={insights.ai_summary} fallback={t.notAvailable} />
         </div>
 
         <div className="glass p-5">
-          <h4 className="text-slate-500 text-xs font-semibold mb-3 flex items-center gap-2 uppercase tracking-wider">
-            <Layers className="w-3.5 h-3.5 text-emerald-500 opacity-50" />
+          <h4 className="text-slate-400 text-xs font-semibold mb-3 flex items-center gap-2 uppercase tracking-wider">
+            <Layers className="w-3.5 h-3.5 text-emerald-400" />
             {t.architectureTitle}
           </h4>
-          <p className="text-slate-500 text-sm leading-relaxed whitespace-pre-wrap">
-            {insights.architecture_analysis || t.notAvailable}
-          </p>
+          <BulletList text={insights.architecture_analysis} fallback={t.notAvailable} />
         </div>
 
         <div className="glass p-5">
-          <h4 className="text-slate-500 text-xs font-semibold mb-3 uppercase tracking-wider">
+          <h4 className="text-slate-400 text-xs font-semibold mb-3 uppercase tracking-wider">
             {t.readmeQualityTitle}
           </h4>
           {insights.readme_quality_score !== null && (
             <div className="flex items-center gap-3 mb-3">
-              <div className="text-2xl font-bold text-slate-700 tabular-nums">
+              <div className="text-2xl font-bold text-slate-100 tabular-nums">
                 {insights.readme_quality_score.toFixed(1)}
               </div>
-              <div className="text-slate-300 text-xs font-medium">/10</div>
-              <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <div className="text-slate-400 text-xs font-medium">/10</div>
+              <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all duration-500"
                   style={{
                     width: `${(insights.readme_quality_score / 10) * 100}%`,
                     background:
                       insights.readme_quality_score >= 7
-                        ? 'linear-gradient(90deg, #10b981, #34d399)'
+                        ? 'linear-gradient(90deg, #cbff60, #34d399)'
                         : insights.readme_quality_score >= 4
                         ? 'linear-gradient(90deg, #f59e0b, #fbbf24)'
                         : 'linear-gradient(90deg, #ef4444, #f87171)',
@@ -121,14 +162,12 @@ export default function AIInsightsPanel({ insights }: Props) {
               </div>
             </div>
           )}
-          <p className="text-slate-500 text-sm leading-relaxed">
-            {insights.readme_quality_feedback || t.notAvailable}
-          </p>
+          <BulletList text={insights.readme_quality_feedback} fallback={t.notAvailable} />
         </div>
 
         <div className="glass p-5">
-          <h4 className="text-slate-500 text-xs font-semibold mb-3 flex items-center gap-2 uppercase tracking-wider">
-            <Wrench className="w-3.5 h-3.5 text-orange-500 opacity-50" />
+          <h4 className="text-slate-400 text-xs font-semibold mb-3 flex items-center gap-2 uppercase tracking-wider">
+            <Wrench className="w-3.5 h-3.5 text-orange-400" />
             {t.techStackTitle}
           </h4>
           {insights.detected_tech_stack.length > 0 ? (
@@ -136,29 +175,29 @@ export default function AIInsightsPanel({ insights }: Props) {
               {insights.detected_tech_stack.map((tech) => (
                 <span
                   key={tech}
-                  className="px-3 py-1.5 glass-sm text-slate-500 text-xs font-medium"
+                  className="px-3 py-1.5 glass-sm text-slate-200 text-xs font-medium"
                 >
                   {tech}
                 </span>
               ))}
             </div>
           ) : (
-            <p className="text-slate-300 text-sm">{t.notAvailable}</p>
+            <p className="text-slate-400 text-sm">{t.notAvailable}</p>
           )}
         </div>
       </div>
 
       {evidenceRefs.length > 0 && (
         <div className="glass p-5">
-          <h4 className="text-slate-500 text-xs font-semibold mb-3 flex items-center gap-2 uppercase tracking-wider">
-            <Link2 className="w-3.5 h-3.5 text-cyan-500 opacity-70" />
+          <h4 className="text-slate-400 text-xs font-semibold mb-3 flex items-center gap-2 uppercase tracking-wider">
+            <Link2 className="w-3.5 h-3.5 text-cyan-400" />
             {t.supportingFilesTitle}
           </h4>
-          <ul className="space-y-1.5 text-xs text-slate-500">
+          <ul className="space-y-1.5 text-xs text-slate-300">
             {evidenceRefs.map((ref, idx) => (
               <li key={`${ref.target}-${idx}`} className="flex flex-wrap items-center gap-2">
-                <span className="px-1.5 py-0.5 glass-sm text-[10px] uppercase text-indigo-500">{ref.source_type}</span>
-                <code className="text-slate-700">{ref.target}</code>
+                <span className="px-1.5 py-0.5 glass-sm text-[10px] uppercase text-[#cbff60]">{ref.source_type}</span>
+                <code className="text-slate-100">{ref.target}</code>
                 <span className="text-slate-400">— {ref.claim}</span>
               </li>
             ))}
@@ -167,7 +206,7 @@ export default function AIInsightsPanel({ insights }: Props) {
       )}
 
       {meta.data_sent_disclosure && (
-        <p className="text-[11px] text-slate-400">{meta.data_sent_disclosure}</p>
+        <p className="text-[11px] text-slate-500">{meta.data_sent_disclosure}</p>
       )}
     </div>
   );

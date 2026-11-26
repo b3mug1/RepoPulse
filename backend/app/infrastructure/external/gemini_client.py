@@ -123,10 +123,10 @@ class AIClient:
             "2. NEVER evaluate individual developers, rank candidates, or judge personal productivity.\n"
             "3. Return ONLY a valid JSON object (no markdown fences, no extra text) matching this exact schema:\n\n"
             '{\n'
-            '  "summary": "<concise project summary, max 250 words>",\n'
-            '  "architecture_analysis": "<architecture analysis, max 400 words>",\n'
+            '  "summary": "<3-4 concise bullet points separated by \\n (- ...), max 90 words total: purpose, core features, stack, maturity>",\n'
+            '  "architecture_analysis": "<3-5 concise bullet points separated by \\n (- ...), max 110 words total: layout, key modules, tests/CI, strengths/risks>",\n'
             '  "readme_score": <float 0-10>,\n'
-            '  "readme_feedback": "<brief README quality feedback>",\n'
+            '  "readme_feedback": "<2-3 concise bullet points separated by \\n (- ...), max 60 words total: strengths and gaps>",\n'
             '  "tech_stack": ["<framework1>", "<library1>", "<tool1>"],\n'
             '  "role_summaries": {\n'
             '    "developer": "<technical summary for engineers: stack, structure, testing/CI>",\n'
