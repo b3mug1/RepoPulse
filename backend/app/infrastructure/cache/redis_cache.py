@@ -191,6 +191,25 @@ class CachedGitHubClient:
         await self._cache.set("github", cache_key, data, ttl_seconds=900)
         return data
 
+    async def get_pull_request_detail(self, owner: str, name: str, number: int) -> dict | None:
+        cache_key = f"pull_detail:{owner}/{name}:{number}"
+        cached = await self._cache.get("github", cache_key)
+        if cached is not None:
+            return cached
+        data = await self._gh.get_pull_request_detail(owner, name, number)
+        if data is not None:
+            await self._cache.set("github", cache_key, data, ttl_seconds=3600)
+        return data
+
+    async def get_pull_request_reviews(self, owner: str, name: str, number: int) -> list[dict]:
+        cache_key = f"pull_reviews:{owner}/{name}:{number}"
+        cached = await self._cache.get("github", cache_key)
+        if cached is not None:
+            return cached
+        data = await self._gh.get_pull_request_reviews(owner, name, number)
+        await self._cache.set("github", cache_key, data, ttl_seconds=3600)
+        return data
+
     async def get_issues(self, owner: str, name: str) -> list[dict]:
         cache_key = f"issues:{owner}/{name}"
         cached = await self._cache.get("github", cache_key)

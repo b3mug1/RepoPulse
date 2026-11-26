@@ -114,6 +114,9 @@ export interface AnalysisDetail {
       open_ratio: number | null;
       avg_time_to_close_hours: number | null;
       avg_open_age_hours: number | null;
+      size_distribution?: { S: number; M: number; L: number; XL: number } | null;
+      avg_time_to_first_review_hours?: number | null;
+      unreviewed_merged_ratio?: number | null;
     };
     issues?: {
       sampled_count: number;
@@ -127,6 +130,8 @@ export interface AnalysisDetail {
       latest_tag: string | null;
       latest_published_at: string | null;
       avg_days_between_releases: number | null;
+      semver_compliant_ratio?: number | null;
+      has_changelog?: boolean | null;
     };
     ci?: {
       providers_detected: string[];
@@ -139,6 +144,12 @@ export interface AnalysisDetail {
       default_branch: string;
       branch_protection: string;
       has_codeowners: boolean | null;
+    };
+    security_hygiene?: {
+      has_security_policy: boolean | null;
+      dependency_automation: string[];
+      lockfiles_detected: string[];
+      manifests_detected: string[];
     };
     activity_windows?: {
       last_7_days: number;

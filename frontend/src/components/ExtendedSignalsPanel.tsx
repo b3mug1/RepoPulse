@@ -1,4 +1,4 @@
-import { GitPullRequest, CircleDot, Tag, Workflow, Shield, Calendar } from 'lucide-react';
+import { GitPullRequest, CircleDot, Tag, Workflow, Shield, Calendar, Lock } from 'lucide-react';
 import { AnalysisDetail } from '../api/client';
 
 interface Props {
@@ -13,6 +13,7 @@ export default function ExtendedSignalsPanel({ signals }: Props) {
   const releases = signals.releases;
   const ci = signals.ci;
   const gov = signals.governance;
+  const sec = signals.security_hygiene;
   const win = signals.activity_windows;
 
   return (
@@ -36,6 +37,13 @@ export default function ExtendedSignalsPanel({ signals }: Props) {
             <p className="text-slate-400 mt-1">
               Open share: {prs.open_ratio !== null ? `${Math.round(prs.open_ratio * 100)}%` : '—'} · Avg close: {prs.avg_time_to_close_hours !== null ? `${prs.avg_time_to_close_hours}h` : '—'}
             </p>
+            {(prs.size_distribution || prs.avg_time_to_first_review_hours != null) && (
+              <p className="text-slate-400 mt-1">
+                {prs.size_distribution ? `Sizes S:${prs.size_distribution.S} M:${prs.size_distribution.M} L:${prs.size_distribution.L} XL:${prs.size_distribution.XL}` : ''}
+                {prs.avg_time_to_first_review_hours != null ? ` · 1st review: ${prs.avg_time_to_first_review_hours}h` : ''}
+                {prs.unreviewed_merged_ratio != null ? ` · Unreviewed merged: ${Math.round(prs.unreviewed_merged_ratio * 100)}%` : ''}
+              </p>
+            )}
           </div>
         )}
 
@@ -59,7 +67,11 @@ export default function ExtendedSignalsPanel({ signals }: Props) {
             <p className="text-slate-500">Latest tag: {releases.latest_tag || 'None detected'}</p>
             <p className="text-slate-400 mt-1">
               Avg interval: {releases.avg_days_between_releases !== null ? `${releases.avg_days_between_releases} days` : '—'}
+              {releases.semver_compliant_ratio != null ? ` · SemVer: ${Math.round(releases.semver_compliant_ratio * 100)}%` : ''}
             </p>
+            {releases.has_changelog != null && (
+              <p className="text-slate-400 mt-1">CHANGELOG: {releases.has_changelog ? 'Present' : 'Not detected'}</p>
+            )}
           </div>
         )}
 
@@ -85,6 +97,21 @@ export default function ExtendedSignalsPanel({ signals }: Props) {
             <p className="text-slate-500">License: {gov.license || 'Not detected'} · Branch ({gov.default_branch}): {gov.branch_protection}</p>
             <p className="text-slate-400 mt-1">
               CODEOWNERS: {gov.has_codeowners === null ? 'Unknown' : gov.has_codeowners ? 'Present' : 'Not detected'}
+            </p>
+          </div>
+        )}
+
+        {sec && (
+          <div className="glass-sm p-4">
+            <div className="flex items-center gap-2 text-slate-600 font-semibold mb-2">
+              <Lock size={14} className="text-rose-400" /> Security &amp; Dependencies
+            </div>
+            <p className="text-slate-500">
+              SECURITY.md: {sec.has_security_policy === null ? 'Unknown' : sec.has_security_policy ? 'Present' : 'Not detected'}
+              {sec.dependency_automation.length > 0 ? ` · ${sec.dependency_automation.join(', ')}` : ''}
+            </p>
+            <p className="text-slate-400 mt-1">
+              Lockfiles: {sec.lockfiles_detected.length ? sec.lockfiles_detected.join(', ') : 'None detected'}
             </p>
           </div>
         )}

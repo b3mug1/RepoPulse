@@ -180,6 +180,27 @@ class GitHubClient:
         except ExternalServiceError:
             return []
 
+    async def get_pull_request_detail(self, owner: str, name: str, number: int) -> dict[str, Any] | None:
+        """GET /repos/{owner}/{name}/pulls/{number}."""
+        try:
+            resp = await self._get(f"{GITHUB_API}/repos/{owner}/{name}/pulls/{number}")
+            data = resp.json()
+            return data if isinstance(data, dict) else None
+        except ExternalServiceError:
+            return None
+
+    async def get_pull_request_reviews(self, owner: str, name: str, number: int) -> list[dict[str, Any]]:
+        """GET /repos/{owner}/{name}/pulls/{number}/reviews."""
+        try:
+            resp = await self._get(
+                f"{GITHUB_API}/repos/{owner}/{name}/pulls/{number}/reviews",
+                params={"per_page": 30},
+            )
+            data = resp.json()
+            return data if isinstance(data, list) else []
+        except ExternalServiceError:
+            return []
+
     async def get_issues(self, owner: str, name: str, *, per_page: int = 50) -> list[dict[str, Any]]:
         """GET /repos/{owner}/{name}/issues (latest updated issues, excluding PRs)."""
         try:

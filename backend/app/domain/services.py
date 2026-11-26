@@ -5,6 +5,7 @@ Domain services — pure business logic that doesn't belong to a single entity.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import re
 from typing import Sequence
 
 from app.domain.entities import CommitStats, Contributor
@@ -320,8 +321,14 @@ def _parse_iso_utc(raw: str | None) -> datetime | None:
         return None
 
 
-def compute_pr_metrics(pulls: Sequence[dict], now: datetime | None = None) -> dict:
-    """Summarize sampled pull requests: open ratio, close time, open age, drafts."""
+def compute_pr_metrics(
+    pulls: Sequence[dict],
+    *,
+    pr_details: Sequence[dict] | None = None,
+    pr_reviews: dict[int, Sequence[dict]] | None = None,
+    now: datetime | None = None,
+) -> dict:
+    """Summarize sampled pull requests: open ratio, close time, open age, sizes, and reviews."""
     ref = to_utc(now) if now is not None else datetime.now(timezone.utc)
     open_prs = [p for p in pulls if p.get("state") == "open"]
     closed_prs = [p for p in pulls if p.get("state") == "closed"]
@@ -340,6 +347,38 @@ def compute_pr_metrics(pulls: Sequence[dict], now: datetime | None = None) -> di
         if created and ref >= created:
             open_ages.append((ref - created).total_seconds() / 3600)
 
+    size_distribution = {"S": 0, "M": 0, "L": 0, "XL": 0}
+    for detail in pr_details or []:
+        changed = int(detail.get("additions", 0)) + int(detail.get("deletions", 0))
+        if changed <= 50:
+            size_distribution["S"] += 1
+        elif changed <= 250:
+            size_distribution["M"] += 1
+        elif changed <= 1000:
+            size_distribution["L"] += 1
+        else:
+            size_distribution["XL"] += 1
+
+    first_review_hours: list[float] = []
+    merged_sampled = 0
+    unreviewed_merged = 0
+    if pr_reviews is not None:
+        by_num = {p.get("number"): p for p in pulls if p.get("number") is not None}
+        for num, reviews in pr_reviews.items():
+            pr = by_num.get(num)
+            if not pr:
+                continue
+            created = _parse_iso_utc(pr.get("created_at"))
+            review_dates = sorted(
+                d for r in reviews if (d := _parse_iso_utc(r.get("submitted_at"))) is not None
+            )
+            if created and review_dates and review_dates[0] >= created:
+                first_review_hours.append((review_dates[0] - created).total_seconds() / 3600)
+            if pr.get("merged_at"):
+                merged_sampled += 1
+                if len(reviews) == 0:
+                    unreviewed_merged += 1
+
     total = len(pulls)
     return {
         "sampled_count": total,
@@ -350,6 +389,9 @@ def compute_pr_metrics(pulls: Sequence[dict], now: datetime | None = None) -> di
         "open_ratio": round(len(open_prs) / total, 2) if total else None,
         "avg_time_to_close_hours": round(sum(close_hours) / len(close_hours), 1) if close_hours else None,
         "avg_open_age_hours": round(sum(open_ages) / len(open_ages), 1) if open_ages else None,
+        "size_distribution": size_distribution if pr_details else None,
+        "avg_time_to_first_review_hours": round(sum(first_review_hours) / len(first_review_hours), 1) if first_review_hours else None,
+        "unreviewed_merged_ratio": round(unreviewed_merged / merged_sampled, 2) if merged_sampled else None,
     }
 
 
@@ -382,8 +424,13 @@ def compute_issue_metrics(issues: Sequence[dict], now: datetime | None = None) -
     }
 
 
-def compute_release_metrics(releases: Sequence[dict]) -> dict:
-    """Summarize sampled releases: count, latest tag, and average interval in days."""
+_SEMVER_RE = re.compile(r"^v?\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$")
+
+
+def compute_release_metrics(
+    releases: Sequence[dict], file_paths: Sequence[str] | None = None
+) -> dict:
+    """Summarize sampled releases: count, latest tag, interval, SemVer compliance, and CHANGELOG."""
     published = [r for r in releases if not r.get("draft")]
     dates = sorted(
         (d for r in published if (d := _parse_iso_utc(r.get("published_at") or r.get("created_at"))) is not None),
@@ -394,11 +441,58 @@ def compute_release_metrics(releases: Sequence[dict]) -> dict:
         for i in range(len(dates) - 1)
     ]
     latest = published[0] if published else None
+    tags = [str(r.get("tag_name") or "").strip() for r in published if r.get("tag_name")]
+    semver_matches = sum(1 for t in tags if _SEMVER_RE.match(t))
+
+    paths = {p.replace("\\", "/").lower().removeprefix("./") for p in file_paths or []}
+    has_changelog = (
+        None if file_paths is None
+        else any(p in {"changelog.md", "changelog", "history.md", "releases.md"} for p in paths)
+    )
     return {
         "sampled_count": len(published),
         "latest_tag": latest.get("tag_name") if latest else None,
         "latest_published_at": (latest.get("published_at") or latest.get("created_at")) if latest else None,
         "avg_days_between_releases": round(sum(intervals) / len(intervals), 1) if intervals else None,
+        "semver_compliant_ratio": round(semver_matches / len(tags), 2) if tags else None,
+        "has_changelog": has_changelog,
+    }
+
+
+def compute_security_hygiene(file_paths: Sequence[str] | None) -> dict:
+    """Detect SECURITY.md, dependency automation (Dependabot/Renovate), lockfiles, and manifests."""
+    if file_paths is None:
+        return {
+            "has_security_policy": None,
+            "dependency_automation": [],
+            "lockfiles_detected": [],
+            "manifests_detected": [],
+        }
+
+    paths = {p.replace("\\", "/").lower().removeprefix("./") for p in file_paths}
+    basenames = {p.rsplit("/", 1)[-1] for p in paths}
+
+    has_security_policy = any(
+        p in {"security.md", ".github/security.md", "docs/security.md"} for p in paths
+    )
+    automation: list[str] = []
+    if any(p in {".github/dependabot.yml", ".github/dependabot.yaml"} for p in paths):
+        automation.append("Dependabot")
+    if any(p in {"renovate.json", "renovate.json5", ".github/renovate.json"} for p in paths):
+        automation.append("Renovate")
+
+    lockfile_names = (
+        "package-lock.json", "yarn.lock", "pnpm-lock.yaml",
+        "poetry.lock", "uv.lock", "pipfile.lock", "cargo.lock", "go.sum",
+    )
+    manifest_names = (
+        "package.json", "pyproject.toml", "requirements.txt", "cargo.toml", "go.mod",
+    )
+    return {
+        "has_security_policy": has_security_policy,
+        "dependency_automation": automation,
+        "lockfiles_detected": sorted(name for name in lockfile_names if name in basenames),
+        "manifests_detected": sorted(name for name in manifest_names if name in basenames),
     }
 
 
