@@ -24,6 +24,7 @@ import structlog
 from sqlalchemy import create_engine, delete, select
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.core.auth import decrypt_github_token
 from app.core.config import get_settings
 from app.core.exceptions import ExternalServiceError
 from app.core.metrics import metrics
@@ -51,6 +52,7 @@ from app.infrastructure.database.models import (
     CommitStatsModel,
     ContributorModel,
     RepositoryModel,
+    UserModel,
     WatchlistModel,
 )
 from app.infrastructure.external.gemini_client import GeminiClient
@@ -144,8 +146,15 @@ async def _analyze(analysis_id: str, owner: str, name: str, session: Session) ->
     3. AI analysis
     """
     aid = uuid.UUID(analysis_id)
+    user_token: str | None = None
+    if hasattr(session, "get"):
+        analysis_row = session.get(AnalysisModel, aid)
+        if analysis_row and analysis_row.user_id:
+            user_row = session.get(UserModel, analysis_row.user_id)
+            if user_row:
+                user_token = decrypt_github_token(user_row.encrypted_github_token)
 
-    gh_raw = GitHubClient()
+    gh_raw = GitHubClient(token=user_token) if user_token else GitHubClient()
     cache = RedisCache()
     gh = CachedGitHubClient(gh_raw, cache)
     gemini = GeminiClient()
@@ -433,7 +442,12 @@ def process_watchlist_scans() -> dict:
         ).all()
 
         for watch, repo in due_rows:
-            analysis = AnalysisModel(repository_id=repo.id, status="pending", progress_stage="queued")
+            analysis = AnalysisModel(
+                repository_id=repo.id,
+                user_id=watch.user_id,
+                status="pending",
+                progress_stage="queued",
+            )
             session.add(analysis)
             session.flush()
             run_analysis_task.apply_async(

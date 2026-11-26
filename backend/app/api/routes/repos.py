@@ -28,7 +28,7 @@ async def get_explore_repositories(
     stmt = (
         select(AnalysisModel, RepositoryModel)
         .join(RepositoryModel, AnalysisModel.repository_id == RepositoryModel.id)
-        .where(AnalysisModel.status == "completed")
+        .where(AnalysisModel.status == "completed", RepositoryModel.is_private.is_(False))
         .order_by(
             AnalysisModel.completed_at.desc().nullslast(),
             RepositoryModel.stars.desc(),
@@ -109,7 +109,8 @@ async def get_repo_health_badge(
 ) -> Response:
     full_name = f"{owner.strip()}/{name.strip()}".lower()
     repo_stmt = select(RepositoryModel.id).where(
-        func.lower(RepositoryModel.full_name) == full_name
+        func.lower(RepositoryModel.full_name) == full_name,
+        RepositoryModel.is_private.is_(False),
     )
     repo_id = (await session.execute(repo_stmt)).scalar_one_or_none()
 

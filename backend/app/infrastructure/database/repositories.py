@@ -51,7 +51,8 @@ def _repo_model_to_entity(m: RepositoryModel) -> Repository:
         id=m.id, owner=m.owner, name=m.name, full_name=m.full_name,
         description=m.description, default_branch=m.default_branch,
         stars=m.stars, forks=m.forks, open_issues=m.open_issues,
-        language=m.language, created_at=m.created_at, updated_at=m.updated_at,
+        language=m.language, is_private=bool(getattr(m, "is_private", False)),
+        created_at=m.created_at, updated_at=m.updated_at,
     )
 
 
@@ -148,6 +149,7 @@ class SqlAlchemyRepoRepository(RepositoryRepository):
             full_name=repo.full_name, description=repo.description,
             default_branch=repo.default_branch, stars=repo.stars,
             forks=repo.forks, open_issues=repo.open_issues, language=repo.language,
+            is_private=repo.is_private,
         ).on_conflict_do_update(
             index_elements=["full_name"],
             set_={
@@ -157,6 +159,7 @@ class SqlAlchemyRepoRepository(RepositoryRepository):
                 "forks": repo.forks,
                 "open_issues": repo.open_issues,
                 "language": repo.language,
+                "is_private": repo.is_private,
             },
         ).returning(RepositoryModel.__table__.c.id)
         result = await self._session.execute(stmt)

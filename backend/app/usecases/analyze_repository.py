@@ -31,6 +31,7 @@ class AnalyzeRepoRequest:
     owner: str
     name: str
     user_id: uuid.UUID | None = None
+    github_token: str | None = None
 
 
 @dataclass
@@ -66,8 +67,18 @@ class AnalyzeRepositoryUseCase:
         logger.info("Triggering analysis", repo=full_name)
 
         # ── Fetch repo metadata from GitHub (cached) ────────────────────
-        gh_data = await self._gh.get_repository(request.owner, request.name)
+        from app.infrastructure.cache.redis_cache import RedisCache
         from app.infrastructure.external.github_client import GitHubClient
+
+        if request.github_token:
+            user_cache = RedisCache()
+            try:
+                user_gh = CachedGitHubClient(GitHubClient(token=request.github_token), user_cache)
+                gh_data = await user_gh.get_repository(request.owner, request.name)
+            finally:
+                await user_cache.close()
+        else:
+            gh_data = await self._gh.get_repository(request.owner, request.name)
         gh = GitHubClient()
         repo_entity = gh.parse_repo_metadata(gh_data)
 

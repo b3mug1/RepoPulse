@@ -1,20 +1,56 @@
 import { Link, Routes, Route, useLocation } from 'react-router-dom';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import anime from 'animejs';
-import { ArrowUpRight, Github } from 'lucide-react';
+import { ArrowUpRight, Github, LogOut } from 'lucide-react';
 import HomePage from './pages/HomePage';
 
 const AnalysisPage = lazy(() => import('./pages/AnalysisPage'));
 const HistoryPage = lazy(() => import('./pages/HistoryPage'));
 const ComparePage = lazy(() => import('./pages/ComparePage'));
 const WatchlistPage = lazy(() => import('./pages/WatchlistPage'));
+const AuthCallbackPage = lazy(() => import('./pages/AuthCallbackPage'));
 import BrandMark from './components/BrandMark';
 import { useLocale } from './i18n';
+import {
+  AuthUser,
+  getCurrentUser,
+  getStoredAuthToken,
+  setStoredAuthToken,
+  startGitHubLogin,
+} from './api/client';
 
 export default function App() {
   const location = useLocation();
   const [serviceStatus, setServiceStatus] = useState<'checking' | 'ok' | 'degraded'>('checking');
+  const [user, setUser] = useState<AuthUser | null>(null);
   const { locale, toggleLocale, t } = useLocale();
+
+  useEffect(() => {
+    const loadUser = () => {
+      if (!getStoredAuthToken()) {
+        setUser(null);
+        return;
+      }
+      getCurrentUser()
+        .then(setUser)
+        .catch(() => {
+          setStoredAuthToken(null);
+          setUser(null);
+        });
+    };
+    loadUser();
+    window.addEventListener('repopulse-auth-changed', loadUser);
+    return () => window.removeEventListener('repopulse-auth-changed', loadUser);
+  }, []);
+
+  const handleGitHubSignIn = async () => {
+    try {
+      const { authorize_url } = await startGitHubLogin();
+      window.location.href = authorize_url;
+    } catch {
+      // OAuth not configured on backend
+    }
+  };
 
   useEffect(() => {
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -53,8 +89,28 @@ export default function App() {
             <Link to="/history" className="nav-link">{t.history}</Link>
             <Link to="/compare" className="nav-link">{t.compare}</Link>
             <Link to="/watchlist" className="nav-link">{t.watchlist}</Link>
-            <Link to="/watchlist" className="nav-link">Watchlist</Link>
             <a href="https://github.com/b3mug1/github_repo_analyzer" target="_blank" rel="noreferrer" className="nav-link"><Github size={15} /> {t.openSource} <ArrowUpRight size={13} /></a>
+            {user ? (
+              <span className="inline-flex items-center gap-2 text-xs text-slate-700">
+                {user.avatar_url && (
+                  <img src={user.avatar_url} alt={user.username} className="w-5 h-5 rounded-full" />
+                )}
+                <span className="font-medium">@{user.username}</span>
+                <button
+                  type="button"
+                  onClick={() => setStoredAuthToken(null)}
+                  className="nav-link"
+                  aria-label={t.signOut}
+                  title={t.signOut}
+                >
+                  <LogOut size={13} />
+                </button>
+              </span>
+            ) : (
+              <button type="button" onClick={handleGitHubSignIn} className="nav-link">
+                <Github size={14} /> {t.signInGitHub}
+              </button>
+            )}
             <button type="button" onClick={toggleLocale} className="nav-link" aria-label="Switch interface language">
               {locale.toUpperCase()}
             </button>
@@ -69,7 +125,7 @@ export default function App() {
           <Route path="/history" element={<Suspense fallback={<div className="analysis-page loading-copy">Loading history…</div>}><HistoryPage /></Suspense>} />
           <Route path="/compare" element={<Suspense fallback={<div className="analysis-page loading-copy">Loading comparison…</div>}><ComparePage /></Suspense>} />
           <Route path="/watchlist" element={<Suspense fallback={<div className="analysis-page loading-copy">Loading watchlist…</div>}><WatchlistPage /></Suspense>} />
-          <Route path="/watchlist" element={<Suspense fallback={<div className="analysis-page loading-copy">Loading watchlist…</div>}><WatchlistPage /></Suspense>} />
+          <Route path="/auth/callback" element={<Suspense fallback={<div className="analysis-page loading-copy">Signing in…</div>}><AuthCallbackPage /></Suspense>} />
           <Route path="/analysis/:id" element={<Suspense fallback={<div className="analysis-page loading-copy">Opening report…</div>}><AnalysisPage /></Suspense>} />
           <Route path="/shared/:token" element={<Suspense fallback={<div className="analysis-page loading-copy">Opening shared report…</div>}><AnalysisPage /></Suspense>} />
         </Routes>
