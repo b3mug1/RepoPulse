@@ -265,6 +265,37 @@ class WatchlistItemOut(BaseModel):
     created_at: datetime
 
 
+class UserOut(BaseModel):
+    id: uuid.UUID
+    username: str
+    avatar_url: str | None = None
+    github_id: int | None = None
+
+
+class GitHubLoginOut(BaseModel):
+    authorize_url: str
+    state: str
+
+
+class GitHubCallbackRequest(BaseModel):
+    code: str = Field(..., min_length=1, max_length=512)
+    state: str = Field(..., min_length=1, max_length=1024)
+
+
+class AuthSessionOut(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserOut
+
+
+class UserRepoOut(BaseModel):
+    full_name: str
+    private: bool = False
+    language: str | None = None
+    stars: int = 0
+    description: str | None = None
+
+
 class ExploreRepoOut(BaseModel):
     analysis_id: uuid.UUID
     full_name: str

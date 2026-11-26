@@ -1,11 +1,41 @@
 import axios from 'axios';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
+const AUTH_TOKEN_KEY = 'repopulse_auth_token';
+
+export function getStoredAuthToken(): string | null {
+  try {
+    return localStorage.getItem(AUTH_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredAuthToken(token: string | null): void {
+  try {
+    if (token) {
+      localStorage.setItem(AUTH_TOKEN_KEY, token);
+    } else {
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+    }
+    window.dispatchEvent(new Event('repopulse-auth-changed'));
+  } catch {
+    // ignore storage errors
+  }
+}
 
 const api = axios.create({
   baseURL: API_BASE,
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
+});
+
+api.interceptors.request.use((config) => {
+  const token = getStoredAuthToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
 });
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -333,6 +363,46 @@ export interface ExploreRepo {
 
 export async function getExploreRepos(limit = 6): Promise<ExploreRepo[]> {
   const { data } = await api.get('/repos/explore', { params: { limit } });
+  return data;
+}
+
+// ── GitHub OAuth & User Session ──────────────────────────────────────────────
+
+export interface AuthUser {
+  id: string;
+  username: string;
+  avatar_url: string | null;
+  github_id: number | null;
+}
+
+export interface UserGitHubRepo {
+  full_name: string;
+  private: boolean;
+  language: string | null;
+  stars: number;
+  description: string | null;
+}
+
+export async function startGitHubLogin(): Promise<{ authorize_url: string; state: string }> {
+  const { data } = await api.get('/auth/github/login');
+  return data;
+}
+
+export async function exchangeGitHubCode(
+  code: string,
+  state: string
+): Promise<{ access_token: string; user: AuthUser }> {
+  const { data } = await api.post('/auth/github/callback', { code, state });
+  return data;
+}
+
+export async function getCurrentUser(): Promise<AuthUser> {
+  const { data } = await api.get('/auth/me');
+  return data;
+}
+
+export async function getUserGitHubRepos(): Promise<UserGitHubRepo[]> {
+  const { data } = await api.get('/auth/github/repos');
   return data;
 }
 

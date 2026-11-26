@@ -262,6 +262,7 @@ class GitHubClient:
             forks=data.get("forks_count", 0),
             open_issues=data.get("open_issues_count", 0),
             language=data.get("language"),
+            is_private=bool(data.get("private", False)),
         )
 
     def parse_commit(self, data: dict[str, Any], analysis_id) -> CommitStats:

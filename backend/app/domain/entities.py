@@ -36,6 +36,7 @@ class Repository:
     forks: int = 0
     open_issues: int = 0
     language: Optional[str] = None
+    is_private: bool = False
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
 

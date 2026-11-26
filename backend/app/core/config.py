@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     celery_result_backend: str = "redis://localhost:6379/2"
 
     github_token: str = ""
+    github_oauth_client_id: str = ""
+    github_oauth_client_secret: str = ""
+    github_oauth_redirect_uri: str = "http://localhost:5173/auth/callback"
     gemini_api_key: str = ""
     gemini_model: str = "gemini-1.5-flash"
     tokenharbor_api_key: str = ""

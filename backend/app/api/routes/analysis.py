@@ -20,6 +20,7 @@ from app.api.dependencies import (
     get_analyze_use_case,
     get_list_analyses_use_case,
 )
+from app.core.auth import decrypt_github_token, get_optional_current_user
 from app.api.rate_limit import limiter
 from collections import Counter
 
@@ -50,7 +51,7 @@ from app.usecases.get_analysis import GetAnalysisUseCase, ListAnalysesUseCase
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, select, update
 from app.infrastructure.database.session import get_db
-from app.infrastructure.database.models import AnalysisModel, RepositoryModel, ShareLinkModel
+from app.infrastructure.database.models import AnalysisModel, RepositoryModel, ShareLinkModel, UserModel
 from app.infrastructure.jobs.celery_app import celery_app
 
 router = APIRouter(prefix="/analyses", tags=["Analyses"])
@@ -75,9 +76,16 @@ async def analyze_repository(
     request: Request,
     body: AnalyzeRequest,
     use_case: AnalyzeRepositoryUseCase = Depends(get_analyze_use_case),
+    current_user: UserModel | None = Depends(get_optional_current_user),
 ) -> AnalyzeResponse:
+    gh_token = decrypt_github_token(current_user.encrypted_github_token) if current_user else None
     result = await use_case.execute(
-        AnalyzeRepoRequest(owner=body.owner, name=body.name)
+        AnalyzeRepoRequest(
+            owner=body.owner,
+            name=body.name,
+            user_id=current_user.id if current_user else None,
+            github_token=gh_token,
+        )
     )
     return AnalyzeResponse(
         analysis_id=result.analysis_id,

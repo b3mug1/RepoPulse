@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import anime from 'animejs';
-import { analyzeRepo, ExploreRepo, getAllAnalysisHistory, getExploreRepos, getSavedRepos, GlobalHistoryItem } from '../api/client';
-import { Search, Loader2, ArrowUpRight, BarChart3, Brain, GitFork, ShieldCheck, GitCommitHorizontal, Sparkles, Activity, Command, Bookmark, Clock3, Compass, Star } from 'lucide-react';
+import { analyzeRepo, ExploreRepo, getAllAnalysisHistory, getExploreRepos, getSavedRepos, getStoredAuthToken, getUserGitHubRepos, GlobalHistoryItem, UserGitHubRepo } from '../api/client';
+import { Search, Loader2, ArrowUpRight, BarChart3, Brain, GitFork, ShieldCheck, GitCommitHorizontal, Sparkles, Activity, Command, Bookmark, Clock3, Compass, Star, Lock } from 'lucide-react';
 
 const CURATED_REPOS = [
   { full_name: 'vercel/next.js', language: 'TypeScript', desc: 'The React Framework for the Web' },
@@ -39,6 +39,7 @@ export default function HomePage() {
   const [savedRepos] = useState<string[]>(() => getSavedRepos());
   const [recentAnalyses, setRecentAnalyses] = useState<GlobalHistoryItem[]>([]);
   const [exploreRepos, setExploreRepos] = useState<ExploreRepo[]>([]);
+  const [userRepos, setUserRepos] = useState<UserGitHubRepo[]>([]);
 
   useEffect(() => {
     getAllAnalysisHistory({ limit: 4, sort_by: 'created_at', sort_order: 'desc' })
@@ -47,6 +48,11 @@ export default function HomePage() {
     getExploreRepos(6)
       .then(setExploreRepos)
       .catch(() => {});
+    if (getStoredAuthToken()) {
+      getUserGitHubRepos()
+        .then((repos) => setUserRepos(repos.slice(0, 6)))
+        .catch(() => {});
+    }
   }, []);
 
   useEffect(() => {
@@ -183,6 +189,34 @@ export default function HomePage() {
           </div>
         )}
       </section>
+
+      {userRepos.length > 0 && (
+        <section className="feature-section" aria-label="Your GitHub repositories">
+          <div className="glass p-5">
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                <Lock size={14} /> Your GitHub repositories (public &amp; private)
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {userRepos.map((repo) => (
+                <button
+                  key={repo.full_name}
+                  type="button"
+                  onClick={() => {
+                    setInput(repo.full_name);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="report-action inline-flex items-center gap-1.5"
+                >
+                  {repo.private && <Lock size={11} className="text-amber-600" />}
+                  {repo.full_name}
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {(savedRepos.length > 0 || recentAnalyses.length > 0) && (
         <section className="feature-section grid grid-cols-1 md:grid-cols-2 gap-4">
