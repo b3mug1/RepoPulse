@@ -24,7 +24,7 @@ jobs:
     steps:
       - name: Run RepoPulse
         id: repopulse
-        uses: b3mug1/RepoPulse@master
+        uses: b3mug1/RepoPulse@v1
         with:
           api-url: https://your-repopulse-instance.example.com
           min-score: "70"
