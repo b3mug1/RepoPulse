@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { exchangeGitHubCode, setStoredAuthToken } from '../api/client';
+import { useLocale } from '../i18n';
 
 export default function AuthCallbackPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { t } = useLocale();
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -18,7 +20,7 @@ export default function AuthCallbackPage() {
       return;
     }
     if (!code || !state) {
-      setError('Missing OAuth code or state parameter.');
+      setError(t.missingOAuthError);
       return;
     }
 
@@ -28,9 +30,9 @@ export default function AuthCallbackPage() {
         navigate('/', { replace: true });
       })
       .catch((err) => {
-        setError(err.response?.data?.detail || 'GitHub sign-in failed.');
+        setError(err.response?.data?.detail || t.githubSignInFailedMsg);
       });
-  }, [navigate, searchParams]);
+  }, [navigate, searchParams, t.githubSignInFailedMsg, t.missingOAuthError]);
 
   return (
     <div className="analysis-page max-w-md mx-auto py-16">
@@ -38,17 +40,17 @@ export default function AuthCallbackPage() {
         {error ? (
           <>
             <AlertCircle className="mx-auto text-rose-500" size={28} />
-            <h1 className="text-base font-semibold text-slate-800">GitHub Sign-In Failed</h1>
+            <h1 className="text-base font-semibold text-slate-800">{t.githubSignInFailed}</h1>
             <p className="text-xs text-slate-500">{error}</p>
             <Link to="/" className="report-action inline-flex">
-              Back to Home
+              {t.backToHome}
             </Link>
           </>
         ) : (
           <>
             <Loader2 className="mx-auto spin text-indigo-500" size={28} />
-            <h1 className="text-base font-semibold text-slate-800">Completing GitHub Sign-In…</h1>
-            <p className="text-xs text-slate-500">Connecting your GitHub session and private repo access.</p>
+            <h1 className="text-base font-semibold text-slate-800">{t.completingGitHubSignIn}</h1>
+            <p className="text-xs text-slate-500">{t.connectingGitHubSession}</p>
           </>
         )}
       </div>

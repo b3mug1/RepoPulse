@@ -81,11 +81,11 @@ export default function App() {
       <div className="ambient ambient-two" />
       <header className="topbar">
         <div className="topbar-inner">
-          <Link to="/" className="brand-lockup" aria-label="RepoPulse home">
+          <Link to="/" className="brand-lockup" aria-label={t.homeAriaLabel}>
             <BrandMark />
             <span className="brand-name">repo<span>pulse</span></span>
           </Link>
-          <nav className="topbar-nav" aria-label="Main navigation">
+          <nav className="topbar-nav" aria-label={t.mainNavLabel}>
             <Link to="/history" className={`nav-link ${location.pathname === '/history' ? 'active' : ''}`}>{t.history}</Link>
             <Link to="/compare" className={`nav-link ${location.pathname === '/compare' ? 'active' : ''}`}>{t.compare}</Link>
             <Link to="/watchlist" className={`nav-link ${location.pathname === '/watchlist' ? 'active' : ''}`}>{t.watchlist}</Link>
@@ -98,7 +98,7 @@ export default function App() {
               <i /> <span className="status-label">{serviceStatus === 'ok' ? t.systemsOk : serviceStatus === 'degraded' ? t.systemsDegraded : t.systemsChecking}</span>
             </span>
             <span className="nav-divider" />
-            <button type="button" onClick={toggleLocale} className="nav-chip" aria-label="Switch interface language">
+            <button type="button" onClick={toggleLocale} className="nav-chip" aria-label={t.switchLanguage}>
               {locale.toUpperCase()}
             </button>
             {user ? (
@@ -128,15 +128,15 @@ export default function App() {
       <main id="main-content" className="page-shell">
         <Routes>
           <Route path="/" element={<HomePage />} />
-          <Route path="/history" element={<Suspense fallback={<div className="analysis-page loading-copy">Loading history…</div>}><HistoryPage /></Suspense>} />
-          <Route path="/compare" element={<Suspense fallback={<div className="analysis-page loading-copy">Loading comparison…</div>}><ComparePage /></Suspense>} />
-          <Route path="/watchlist" element={<Suspense fallback={<div className="analysis-page loading-copy">Loading watchlist…</div>}><WatchlistPage /></Suspense>} />
-          <Route path="/auth/callback" element={<Suspense fallback={<div className="analysis-page loading-copy">Signing in…</div>}><AuthCallbackPage /></Suspense>} />
-          <Route path="/analysis/:id" element={<Suspense fallback={<div className="analysis-page loading-copy">Opening report…</div>}><AnalysisPage /></Suspense>} />
-          <Route path="/shared/:token" element={<Suspense fallback={<div className="analysis-page loading-copy">Opening shared report…</div>}><AnalysisPage /></Suspense>} />
+          <Route path="/history" element={<Suspense fallback={<div className="analysis-page loading-copy">{t.loadingHistory}</div>}><HistoryPage /></Suspense>} />
+          <Route path="/compare" element={<Suspense fallback={<div className="analysis-page loading-copy">{t.loadingComparison}</div>}><ComparePage /></Suspense>} />
+          <Route path="/watchlist" element={<Suspense fallback={<div className="analysis-page loading-copy">{t.loadingWatchlist}</div>}><WatchlistPage /></Suspense>} />
+          <Route path="/auth/callback" element={<Suspense fallback={<div className="analysis-page loading-copy">{t.signingIn}</div>}><AuthCallbackPage /></Suspense>} />
+          <Route path="/analysis/:id" element={<Suspense fallback={<div className="analysis-page loading-copy">{t.openingReport}</div>}><AnalysisPage /></Suspense>} />
+          <Route path="/shared/:token" element={<Suspense fallback={<div className="analysis-page loading-copy">{t.openingSharedReport}</div>}><AnalysisPage /></Suspense>} />
         </Routes>
       </main>
-      <footer className="site-footer"><span>RepoPulse</span><span>Open source intelligence for the people who build.</span><span>Made for curious teams <b>✳</b></span></footer>
+      <footer className="site-footer"><span>RepoPulse</span><span>{t.footerTagline}</span><span>{t.footerTeam} <b>✳</b></span></footer>
     </div>
   );
 }

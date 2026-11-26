@@ -1,21 +1,23 @@
 import { Contributor } from '../api/client';
+import { useLocale } from '../i18n';
 
 interface Props {
   contributors: Contributor[];
 }
 
 export default function ContributorRanking({ contributors }: Props) {
+  const { t, dateLocale } = useLocale();
   const sorted = [...contributors].sort((a, b) => b.total_commits - a.total_commits);
   const maxCommits = sorted[0]?.total_commits || 1;
 
   return (
     <div className="glass p-6">
       <h3 className="text-slate-600 text-sm font-semibold mb-1">
-        Contributors
+        {t.contributorsTitle}
         <span className="text-slate-300 ml-2 font-normal">{contributors.length}</span>
       </h3>
       <p className="text-[11px] text-slate-400 mb-5">
-        Based on sampled commits only; commit counts reflect activity volume, not individual developer performance.
+        {t.contributorsDisclaimer}
       </p>
       <div className="space-y-3.5">
         {sorted.slice(0, 15).map((c, index) => (
@@ -27,7 +29,7 @@ export default function ContributorRanking({ contributors }: Props) {
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-slate-700 text-sm font-semibold truncate">{c.username}</span>
                 <span className="text-slate-400 text-xs flex-shrink-0 ml-3 tabular-nums">
-                  {c.total_commits} commits &middot; +{c.additions.toLocaleString()} -{c.deletions.toLocaleString()}
+                  {c.total_commits} {t.commits} &middot; +{c.additions.toLocaleString(dateLocale)} -{c.deletions.toLocaleString(dateLocale)}
                 </span>
               </div>
               <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">

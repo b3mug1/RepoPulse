@@ -1,19 +1,28 @@
 import { ShieldCheck, AlertTriangle, CheckCircle2, Info } from 'lucide-react';
 import { AnalysisDetail } from '../api/client';
-
-const labels: Record<string, string> = {
-  activity: 'Activity',
-  collaboration: 'Collaboration',
-  documentation: 'Documentation',
-  testing: 'Testing signals',
-  automation: 'CI automation',
-};
+import { useLocale } from '../i18n';
 
 interface Props {
   health: AnalysisDetail['health'];
 }
 
 export default function RepositoryHealthPanel({ health }: Props) {
+  const { t } = useLocale();
+  const labels: Record<string, string> = {
+    activity: t.healthActivity,
+    collaboration: t.healthCollaboration,
+    documentation: t.healthDocumentation,
+    testing: t.healthTesting,
+    automation: t.healthAutomation,
+  };
+
+  const confidenceLabel = (c: string) => {
+    if (c === 'high') return t.confidenceHigh;
+    if (c === 'medium') return t.confidenceMedium;
+    if (c === 'low') return t.confidenceLow;
+    return c;
+  };
+
   const scoreColor = health.score === null ? 'text-slate-400' : health.score >= 75 ? 'text-emerald-600' : health.score >= 50 ? 'text-amber-600' : 'text-rose-600';
   return (
     <section className="glass p-6 md:p-8" aria-labelledby="health-title">
@@ -25,11 +34,11 @@ export default function RepositoryHealthPanel({ health }: Props) {
           </div>
           <div>
             <h3 id="health-title" className="text-slate-700 font-semibold flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-indigo-500" /> Repository health
+              <ShieldCheck className="w-4 h-4 text-indigo-500" /> {t.repoHealthTitle}
             </h3>
             <p className={`text-sm font-medium mt-1 ${scoreColor}`}>{health.grade}</p>
             <p className="text-[11px] text-slate-400 mt-1">
-              {health.coverage}% of weighted signals measured · Confidence: <span className="capitalize font-medium text-slate-500">{health.confidence}</span>
+              {health.coverage}% {t.healthSignalsMeasured} <span className="capitalize font-medium text-slate-500">{confidenceLabel(health.confidence)}</span>
             </p>
           </div>
         </div>
@@ -44,19 +53,19 @@ export default function RepositoryHealthPanel({ health }: Props) {
                 {component.score !== null && <div className="h-full bg-gradient-to-r from-indigo-500 to-violet-500" style={{ width: `${component.score}%` }} />}
               </div>
               <p className="text-[10px] text-slate-400 mt-2">
-                Weight {component.weight}% · {component.weighted_points !== null ? `+${component.weighted_points.toFixed(1)} pts` : 'Not counted'}
+                {t.weightLabel} {component.weight}% · {component.weighted_points !== null ? `+${component.weighted_points.toFixed(1)} ${t.ptsLabel}` : t.notCounted}
               </p>
               <details className="mt-2 text-[10px] text-slate-400">
-                <summary className="cursor-pointer text-indigo-500">How this is measured</summary>
+                <summary className="cursor-pointer text-indigo-500">{t.howMeasured}</summary>
                 <p className="mt-2 leading-relaxed">{component.explanation}</p>
-                <p className="mt-1 leading-relaxed"><strong>Evidence:</strong> {component.evidence}</p>
+                <p className="mt-1 leading-relaxed"><strong>{t.evidenceLabel}</strong> {component.evidence}</p>
               </details>
             </div>
           ))}
         </div>
       </div>
       <div className="mt-6 border-t border-white/60 pt-5">
-        <h4 className="text-xs uppercase tracking-wider font-semibold text-slate-500 mb-3">What to improve</h4>
+        <h4 className="text-xs uppercase tracking-wider font-semibold text-slate-500 mb-3">{t.whatToImprove}</h4>
         <div className="grid md:grid-cols-2 gap-2">
           {health.findings.map((finding, index) => {
             const Icon = finding.severity === 'high' ? AlertTriangle : finding.severity === 'low' ? Info : CheckCircle2;
@@ -69,7 +78,7 @@ export default function RepositoryHealthPanel({ health }: Props) {
           })}
         </div>
       </div>
-      <p className="text-[10px] text-slate-400 mt-4">Score v{health.formula_version} is normalized over measured signals. Missing data is shown as “—”, not treated as a failing score. This is a heuristic snapshot, not a security audit or a measure of developer performance.</p>
+      <p className="text-[10px] text-slate-400 mt-4">{t.healthDisclaimerPrefix}{health.formula_version} {t.healthDisclaimerSuffix}</p>
     </section>
   );
 }

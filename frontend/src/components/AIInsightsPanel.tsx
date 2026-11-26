@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { AIInsights } from '../api/client';
+import { useLocale } from '../i18n';
 import { Sparkles, FileText, Layers, Wrench, Link2, ShieldAlert } from 'lucide-react';
 
 interface Props {
@@ -9,22 +10,29 @@ interface Props {
 type RoleTab = 'developer' | 'manager' | 'recruiter';
 
 export default function AIInsightsPanel({ insights }: Props) {
+  const { t } = useLocale();
   const [role, setRole] = useState<RoleTab>('developer');
   const meta = insights.ai_metadata || {};
   const roleSummaries = meta.role_summaries || {};
   const evidenceRefs = meta.evidence_refs || [];
+
+  const roleLabels: Record<RoleTab, string> = {
+    developer: t.roleDeveloper,
+    manager: t.roleManager,
+    recruiter: t.roleRecruiter,
+  };
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-slate-600 text-sm font-semibold flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-violet-500 opacity-60" />
-          AI Interpretation
+          {t.aiInterpretation}
         </h3>
         {meta.model && (
           <span className="text-[11px] text-slate-400">
-            Provider: {meta.provider || 'unknown'} · {meta.model}
-            {meta.prompt_version ? ` · Prompt v${meta.prompt_version}` : ''}
+            {t.providerLabel} {meta.provider || t.unknown} · {meta.model}
+            {meta.prompt_version ? ` · ${t.promptVersionPrefix}${meta.prompt_version}` : ''}
           </span>
         )}
       </div>
@@ -32,7 +40,7 @@ export default function AIInsightsPanel({ insights }: Props) {
       {meta.status === 'unavailable' && (
         <div className="glass p-4 text-xs text-amber-600 flex items-center gap-2">
           <ShieldAlert size={15} className="shrink-0" />
-          <span>AI insights were unavailable for this run. Core repository metrics and Health Score remain unaffected.</span>
+          <span>{t.aiUnavailableBanner}</span>
         </div>
       )}
 
@@ -40,9 +48,9 @@ export default function AIInsightsPanel({ insights }: Props) {
         <div className="glass p-5">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Audience summary (Model interpretation)
+              {t.audienceSummaryTitle}
             </span>
-            <div className="flex gap-1.5" role="tablist" aria-label="Summary audience">
+            <div className="flex gap-1.5" role="tablist" aria-label={t.audienceAriaLabel}>
               {(['developer', 'manager', 'recruiter'] as RoleTab[]).map((tab) => (
                 <button
                   key={tab}
@@ -52,16 +60,16 @@ export default function AIInsightsPanel({ insights }: Props) {
                   onClick={() => setRole(tab)}
                   className={`report-action capitalize ${role === tab ? 'border-indigo-400 text-indigo-500' : ''}`}
                 >
-                  {tab}
+                  {roleLabels[tab]}
                 </button>
               ))}
             </div>
           </div>
           <p className="text-slate-600 text-sm leading-relaxed">
-            {roleSummaries[role] || insights.ai_summary || 'Not available'}
+            {roleSummaries[role] || insights.ai_summary || t.notAvailable}
           </p>
           <p className="text-[10px] text-slate-400 mt-2">
-            Repository-level context only — RepoPulse never generates candidate evaluations or individual developer ratings.
+            {t.aiDisclaimer}
           </p>
         </div>
       )}
@@ -70,26 +78,26 @@ export default function AIInsightsPanel({ insights }: Props) {
         <div className="glass p-5">
           <h4 className="text-slate-500 text-xs font-semibold mb-3 flex items-center gap-2 uppercase tracking-wider">
             <FileText className="w-3.5 h-3.5 text-indigo-500 opacity-50" />
-            Summary (Model interpretation)
+            {t.summaryTitle}
           </h4>
           <p className="text-slate-500 text-sm leading-relaxed whitespace-pre-wrap">
-            {insights.ai_summary || 'Not available'}
+            {insights.ai_summary || t.notAvailable}
           </p>
         </div>
 
         <div className="glass p-5">
           <h4 className="text-slate-500 text-xs font-semibold mb-3 flex items-center gap-2 uppercase tracking-wider">
             <Layers className="w-3.5 h-3.5 text-emerald-500 opacity-50" />
-            Architecture (Model interpretation)
+            {t.architectureTitle}
           </h4>
           <p className="text-slate-500 text-sm leading-relaxed whitespace-pre-wrap">
-            {insights.architecture_analysis || 'Not available'}
+            {insights.architecture_analysis || t.notAvailable}
           </p>
         </div>
 
         <div className="glass p-5">
           <h4 className="text-slate-500 text-xs font-semibold mb-3 uppercase tracking-wider">
-            README Quality
+            {t.readmeQualityTitle}
           </h4>
           {insights.readme_quality_score !== null && (
             <div className="flex items-center gap-3 mb-3">
@@ -114,14 +122,14 @@ export default function AIInsightsPanel({ insights }: Props) {
             </div>
           )}
           <p className="text-slate-500 text-sm leading-relaxed">
-            {insights.readme_quality_feedback || 'Not available'}
+            {insights.readme_quality_feedback || t.notAvailable}
           </p>
         </div>
 
         <div className="glass p-5">
           <h4 className="text-slate-500 text-xs font-semibold mb-3 flex items-center gap-2 uppercase tracking-wider">
             <Wrench className="w-3.5 h-3.5 text-orange-500 opacity-50" />
-            Tech Stack
+            {t.techStackTitle}
           </h4>
           {insights.detected_tech_stack.length > 0 ? (
             <div className="flex flex-wrap gap-1.5">
@@ -135,7 +143,7 @@ export default function AIInsightsPanel({ insights }: Props) {
               ))}
             </div>
           ) : (
-            <p className="text-slate-300 text-sm">Not available</p>
+            <p className="text-slate-300 text-sm">{t.notAvailable}</p>
           )}
         </div>
       </div>
@@ -144,7 +152,7 @@ export default function AIInsightsPanel({ insights }: Props) {
         <div className="glass p-5">
           <h4 className="text-slate-500 text-xs font-semibold mb-3 flex items-center gap-2 uppercase tracking-wider">
             <Link2 className="w-3.5 h-3.5 text-cyan-500 opacity-70" />
-            Supporting Files &amp; GitHub API Facts
+            {t.supportingFilesTitle}
           </h4>
           <ul className="space-y-1.5 text-xs text-slate-500">
             {evidenceRefs.map((ref, idx) => (

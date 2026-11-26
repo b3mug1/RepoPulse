@@ -1,4 +1,5 @@
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
+import { useLocale } from '../i18n';
 
 interface Props {
   distribution: Record<string, number>;
@@ -11,6 +12,7 @@ const COLORS = [
 ];
 
 export default function LanguagePieChart({ distribution }: Props) {
+  const { t } = useLocale();
   const data = Object.entries(distribution)
     .map(([name, value]) => ({ name, value }))
     .sort((a, b) => b.value - a.value);
@@ -18,15 +20,15 @@ export default function LanguagePieChart({ distribution }: Props) {
   if (data.length === 0) {
     return (
       <div className="glass p-6">
-        <h3 className="text-slate-600 text-sm font-semibold mb-5">Languages</h3>
-        <p className="text-slate-300 text-sm">No language data available</p>
+        <h3 className="text-slate-600 text-sm font-semibold mb-5">{t.languagesTitle}</h3>
+        <p className="text-slate-300 text-sm">{t.noLanguageData}</p>
       </div>
     );
   }
 
   return (
-    <div className="glass p-6" role="region" aria-label="Programming language distribution chart">
-      <h3 className="text-slate-600 text-sm font-semibold mb-5">Languages</h3>
+    <div className="glass p-6" role="region" aria-label={t.languagesAria}>
+      <h3 className="text-slate-600 text-sm font-semibold mb-5">{t.languagesTitle}</h3>
       <div className="flex flex-col sm:flex-row items-center gap-6">
         <div className="flex-shrink-0" aria-hidden="true">
           <ResponsiveContainer width={200} height={200}>

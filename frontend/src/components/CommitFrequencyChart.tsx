@@ -1,19 +1,21 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { DailyCommit } from '../api/client';
+import { useLocale } from '../i18n';
 
 interface Props {
   data: DailyCommit[];
 }
 
 export default function CommitFrequencyChart({ data }: Props) {
+  const { t } = useLocale();
   return (
-    <div className="glass p-6" role="region" aria-label="Daily commit frequency chart in UTC">
+    <div className="glass p-6" role="region" aria-label={t.dailyCommitsAria}>
       <div className="flex items-baseline justify-between gap-2 mb-5">
-        <h3 className="text-slate-600 text-sm font-semibold">Daily Commits</h3>
-        <span className="text-[11px] text-slate-400">UTC calendar days · sampled commits</span>
+        <h3 className="text-slate-600 text-sm font-semibold">{t.dailyCommitsTitle}</h3>
+        <span className="text-[11px] text-slate-400">{t.dailyCommitsSubtitle}</span>
       </div>
       {data.length === 0 ? (
-        <p className="text-slate-300 text-sm">No commit data available.</p>
+        <p className="text-slate-300 text-sm">{t.noCommitData}</p>
       ) : (
         <div aria-hidden="true">
           <ResponsiveContainer width="100%" height={280}>
@@ -47,7 +49,7 @@ export default function CommitFrequencyChart({ data }: Props) {
               }}
               labelStyle={{ color: '#475569', fontSize: 12 }}
               itemStyle={{ color: '#1e293b', fontSize: 12 }}
-              formatter={(value: number) => [`${value}`, 'Commits']}
+              formatter={(value: number) => [`${value}`, t.chartCommitsName]}
             />
             <Bar dataKey="commits" fill="rgba(99,102,241,0.65)" radius={[6, 6, 0, 0]} />
           </BarChart>

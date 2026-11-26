@@ -1,4 +1,5 @@
 import { DailyCommit } from '../api/client';
+import { useLocale } from '../i18n';
 
 interface Props {
   data: DailyCommit[];
@@ -15,6 +16,7 @@ function cellColor(count: number): string {
 }
 
 export default function ActivityHeatmap({ data, referenceDate }: Props) {
+  const { t } = useLocale();
   const counts = new Map(data.map((d) => [d.date, d.commits]));
   const anchor = referenceDate ? new Date(referenceDate) : new Date();
   const endUtc = new Date(
@@ -35,12 +37,12 @@ export default function ActivityHeatmap({ data, referenceDate }: Props) {
     <section
       className="glass p-6"
       role="region"
-      aria-label="90-day UTC commit activity heatmap"
+      aria-label={t.heatmapAria}
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4">
-        <h3 className="text-slate-600 text-sm font-semibold">90-Day Activity Heatmap</h3>
+        <h3 className="text-slate-600 text-sm font-semibold">{t.heatmapTitle}</h3>
         <span className="text-[11px] text-slate-400">
-          {totalInWindow} sampled commits across {activeDays} active UTC days
+          {t.heatmapSubtitle(totalInWindow, activeDays)}
         </span>
       </div>
 
@@ -54,13 +56,13 @@ export default function ActivityHeatmap({ data, referenceDate }: Props) {
             key={cell.date}
             className="aspect-square rounded-[3px] border border-white/5 transition-transform hover:scale-110"
             style={{ backgroundColor: cellColor(cell.count) }}
-            title={`${cell.date} (UTC): ${cell.count} commit${cell.count === 1 ? '' : 's'}`}
+            title={t.heatmapTooltip(cell.date, cell.count)}
           />
         ))}
       </div>
 
       <div className="flex items-center justify-end gap-1.5 mt-3 text-[10px] text-slate-400">
-        <span>Less</span>
+        <span>{t.less}</span>
         {[0, 1, 3, 6].map((level) => (
           <span
             key={level}
@@ -68,7 +70,7 @@ export default function ActivityHeatmap({ data, referenceDate }: Props) {
             style={{ backgroundColor: cellColor(level) }}
           />
         ))}
-        <span>More</span>
+        <span>{t.more}</span>
       </div>
     </section>
   );
