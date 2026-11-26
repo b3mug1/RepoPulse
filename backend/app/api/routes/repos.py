@@ -3,15 +3,63 @@
 from html import escape
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.schemas import ExploreRepoOut
 from app.infrastructure.database.models import AnalysisModel, RepositoryModel
 from app.infrastructure.database.session import get_db
 
 router = APIRouter(prefix="/repos", tags=["Repositories"])
+
+
+@router.get(
+    "/explore",
+    response_model=list[ExploreRepoOut],
+    summary="Explore recently analyzed popular open-source repositories",
+)
+async def get_explore_repositories(
+    session: Annotated[AsyncSession, Depends(get_db)],
+    limit: int = Query(6, ge=1, le=24),
+) -> list[ExploreRepoOut]:
+    """Return unique recently analyzed repositories ordered by recency and stars."""
+    stmt = (
+        select(AnalysisModel, RepositoryModel)
+        .join(RepositoryModel, AnalysisModel.repository_id == RepositoryModel.id)
+        .where(AnalysisModel.status == "completed")
+        .order_by(
+            AnalysisModel.completed_at.desc().nullslast(),
+            RepositoryModel.stars.desc(),
+        )
+        .limit(limit * 4)
+    )
+    rows = (await session.execute(stmt)).all()
+
+    seen_repo_ids = set()
+    items: list[ExploreRepoOut] = []
+    for analysis, repo in rows:
+        if repo.id in seen_repo_ids:
+            continue
+        seen_repo_ids.add(repo.id)
+        items.append(
+            ExploreRepoOut(
+                analysis_id=analysis.id,
+                full_name=repo.full_name,
+                description=repo.description,
+                language=repo.language,
+                stars=repo.stars or 0,
+                health_score=analysis.health_score if analysis.health_coverage else None,
+                bus_factor=analysis.bus_factor or 0,
+                commits_per_month=analysis.commits_per_month or 0.0,
+                completed_at=analysis.completed_at,
+            )
+        )
+        if len(items) >= limit:
+            break
+
+    return items
 
 
 def render_health_badge_svg(score: int | None) -> str:

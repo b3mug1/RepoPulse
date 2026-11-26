@@ -265,6 +265,18 @@ class WatchlistItemOut(BaseModel):
     created_at: datetime
 
 
+class ExploreRepoOut(BaseModel):
+    analysis_id: uuid.UUID
+    full_name: str
+    description: str | None = None
+    language: str | None = None
+    stars: int = 0
+    health_score: int | None = None
+    bus_factor: int = 0
+    commits_per_month: float = 0.0
+    completed_at: datetime | None = None
+
+
 class HealthResponse(BaseModel):
     status: str = "ok"
     version: str = "1.0.0"
