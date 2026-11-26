@@ -162,6 +162,7 @@ export interface AnalysisHistoryItem {
   id: string;
   status: string;
   total_commits: number;
+  commits_per_month?: number;
   bus_factor: number;
   health_score: number | null;
   health_coverage: number;
