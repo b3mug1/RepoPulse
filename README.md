@@ -11,7 +11,7 @@
 
 RepoPulse analyzes public GitHub repositories via read-only REST APIs, computes transparent engineering metrics and a versioned **Health Score (v1.1)** in background Celery workers, caches responses in Redis with volatility-based TTLs and `ETag` conditional requests, persists results in PostgreSQL, and presents reports in a responsive React + TypeScript UI.
 
-> **Live Demo:** *Add your deployed demo URL here after deployment (see [docs/OPERATIONS.md](docs/OPERATIONS.md)).*  
+> **Live Demo:** *[URL(https://repo.b3mug1.dev/) (see [docs/OPERATIONS.md](docs/OPERATIONS.md)).*  
 > **Case Study & Engineering Trade-offs:** [docs/CASE_STUDY.md](docs/CASE_STUDY.md)
 
 ## Features
