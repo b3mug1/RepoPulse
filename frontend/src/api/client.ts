@@ -319,6 +319,23 @@ export async function unsubscribeWatchlist(watchlistId: string): Promise<void> {
   await api.delete(`/watchlist/${watchlistId}`);
 }
 
+export interface ExploreRepo {
+  analysis_id: string;
+  full_name: string;
+  description: string | null;
+  language: string | null;
+  stars: number;
+  health_score: number | null;
+  bus_factor: number;
+  commits_per_month: number;
+  completed_at: string | null;
+}
+
+export async function getExploreRepos(limit = 6): Promise<ExploreRepo[]> {
+  const { data } = await api.get('/repos/explore', { params: { limit } });
+  return data;
+}
+
 // ── Saved Repositories (localStorage) ────────────────────────────────────────
 
 const SAVED_REPOS_KEY = 'repopulse_saved_repos';

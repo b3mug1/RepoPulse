@@ -21,6 +21,7 @@ describe('HomePage', () => {
       limit: 4,
       offset: 0,
     });
+    vi.spyOn(client, 'getExploreRepos').mockResolvedValue([]);
   });
 
   it('shows validation error on invalid repo input', () => {
@@ -56,5 +57,30 @@ describe('HomePage', () => {
       expect(spy).toHaveBeenCalledWith('vercel', 'next.js');
       expect(mockNavigate).toHaveBeenCalledWith('/analysis/abc-123');
     });
+  });
+
+  it('renders explore showcase repositories when returned by API', async () => {
+    vi.spyOn(client, 'getExploreRepos').mockResolvedValue([
+      {
+        analysis_id: 'exp-1',
+        full_name: 'fastapi/fastapi',
+        description: 'FastAPI framework',
+        language: 'Python',
+        stars: 82000,
+        health_score: 92,
+        bus_factor: 3,
+        commits_per_month: 64,
+        completed_at: '2026-01-01T00:00:00Z',
+      },
+    ]);
+
+    render(
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('92/100')).toBeInTheDocument();
+    expect(screen.getByText('fastapi/fastapi')).toBeInTheDocument();
   });
 });

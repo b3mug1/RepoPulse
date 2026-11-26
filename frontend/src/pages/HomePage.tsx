@@ -1,8 +1,29 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import anime from 'animejs';
-import { analyzeRepo, getAllAnalysisHistory, getSavedRepos, GlobalHistoryItem } from '../api/client';
-import { Search, Loader2, ArrowUpRight, BarChart3, Brain, GitFork, ShieldCheck, GitCommitHorizontal, Sparkles, Activity, Command, Bookmark, Clock3 } from 'lucide-react';
+import { analyzeRepo, ExploreRepo, getAllAnalysisHistory, getExploreRepos, getSavedRepos, GlobalHistoryItem } from '../api/client';
+import { Search, Loader2, ArrowUpRight, BarChart3, Brain, GitFork, ShieldCheck, GitCommitHorizontal, Sparkles, Activity, Command, Bookmark, Clock3, Compass, Star } from 'lucide-react';
+
+const CURATED_REPOS = [
+  { full_name: 'vercel/next.js', language: 'TypeScript', desc: 'The React Framework for the Web' },
+  { full_name: 'facebook/react', language: 'JavaScript', desc: 'The library for web and native user interfaces' },
+  { full_name: 'fastapi/fastapi', language: 'Python', desc: 'High-performance async Python web framework' },
+  { full_name: 'vitejs/vite', language: 'TypeScript', desc: 'Next generation frontend tooling' },
+  { full_name: 'astral-sh/ruff', language: 'Rust', desc: 'An extremely fast Python linter and formatter' },
+  { full_name: 'tailwindlabs/tailwindcss', language: 'TypeScript', desc: 'A utility-first CSS framework' },
+];
+
+function formatStars(stars: number): string {
+  if (stars >= 1000) return `${(stars / 1000).toFixed(stars >= 10000 ? 0 : 1)}k`;
+  return String(stars);
+}
+
+function healthTone(score: number | null): string {
+  if (score === null) return 'text-slate-500 bg-slate-100';
+  if (score >= 80) return 'text-emerald-700 bg-emerald-100';
+  if (score >= 50) return 'text-amber-700 bg-amber-100';
+  return 'text-rose-700 bg-rose-100';
+}
 
 const features = [
   { icon: BarChart3, number: '01', title: 'Signal over noise', desc: 'A clear picture of velocity, code churn and the rhythm of a project.' },
@@ -17,10 +38,14 @@ export default function HomePage() {
   const [error, setError] = useState('');
   const [savedRepos] = useState<string[]>(() => getSavedRepos());
   const [recentAnalyses, setRecentAnalyses] = useState<GlobalHistoryItem[]>([]);
+  const [exploreRepos, setExploreRepos] = useState<ExploreRepo[]>([]);
 
   useEffect(() => {
     getAllAnalysisHistory({ limit: 4, sort_by: 'created_at', sort_order: 'desc' })
       .then((res) => setRecentAnalyses(res.items))
+      .catch(() => {});
+    getExploreRepos(6)
+      .then(setExploreRepos)
       .catch(() => {});
   }, []);
 
@@ -94,6 +119,71 @@ export default function HomePage() {
       </section>
 
       <section className="feature-section"><div className="section-kicker"><span>WHAT YOU GET</span><span>01 — 03</span></div><div className="features-grid">{features.map((feature) => <article className="feature-card" key={feature.number}><div className="feature-top"><feature.icon size={18} /><span>{feature.number}</span></div><h2>{feature.title}</h2><p>{feature.desc}</p><div className="feature-rule" /></article>)}</div></section>
+
+      <section className="feature-section" aria-label="Explore open-source repositories">
+        <div className="flex items-center justify-between gap-2 mb-4">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+            <Compass size={14} /> Explore analyzed open-source repositories
+          </div>
+          <Link to="/compare" className="text-xs text-indigo-500 hover:underline">
+            Compare benchmark
+          </Link>
+        </div>
+
+        {exploreRepos.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {exploreRepos.map((repo) => (
+              <Link
+                key={repo.analysis_id}
+                to={`/analysis/${repo.analysis_id}`}
+                className="glass p-5 flex flex-col justify-between gap-3 hover:border-indigo-300/60 transition-colors"
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="font-semibold text-sm text-slate-800 truncate">{repo.full_name}</span>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold shrink-0 ${healthTone(repo.health_score)}`}>
+                      {repo.health_score !== null ? `${repo.health_score}/100` : '—'}
+                    </span>
+                  </div>
+                  {repo.description && (
+                    <p className="text-xs text-slate-500 mt-1.5 line-clamp-2">{repo.description}</p>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-500 pt-2 border-t border-slate-200/60">
+                  <span className="inline-flex items-center gap-1"><Star size={12} /> {formatStars(repo.stars)}</span>
+                  {repo.language && <span>{repo.language}</span>}
+                  <span>Bus factor {repo.bus_factor}</span>
+                  <span>{repo.commits_per_month.toFixed(0)} commits/mo</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {CURATED_REPOS.map((repo) => (
+              <button
+                key={repo.full_name}
+                type="button"
+                onClick={() => {
+                  setInput(repo.full_name);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className="glass p-5 text-left flex flex-col justify-between gap-2 hover:border-indigo-300/60 transition-colors"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-sm text-slate-800">{repo.full_name}</span>
+                  <span className="text-[11px] text-slate-500">{repo.language}</span>
+                </div>
+                <p className="text-xs text-slate-500">{repo.desc}</p>
+                <span className="text-[11px] text-indigo-500 font-medium inline-flex items-center gap-1">
+                  Analyze now <ArrowUpRight size={12} />
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+
       {(savedRepos.length > 0 || recentAnalyses.length > 0) && (
         <section className="feature-section grid grid-cols-1 md:grid-cols-2 gap-4">
           {savedRepos.length > 0 && (
