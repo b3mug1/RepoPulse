@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertCircle, Loader2 } from 'lucide-react';
-import { exchangeGitHubCode, setStoredAuthToken } from '../api/client';
+import { exchangeGitHubCode, setStoredAuthToken, setStoredAuthUser } from '../api/client';
 import { useLocale } from '../i18n';
 
 export default function AuthCallbackPage() {
@@ -26,6 +26,7 @@ export default function AuthCallbackPage() {
 
     exchangeGitHubCode(code, state)
       .then((res) => {
+        setStoredAuthUser(res.user);
         setStoredAuthToken(res.access_token);
         navigate('/', { replace: true });
       })

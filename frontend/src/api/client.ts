@@ -2,6 +2,7 @@ import axios from 'axios';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
 const AUTH_TOKEN_KEY = 'repopulse_auth_token';
+const AUTH_USER_KEY = 'repopulse_auth_user';
 
 export function getStoredAuthToken(): string | null {
   try {
@@ -11,12 +12,36 @@ export function getStoredAuthToken(): string | null {
   }
 }
 
+export function getStoredAuthUser(): AuthUser | null {
+  try {
+    const raw = localStorage.getItem(AUTH_USER_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed.username === 'string' ? (parsed as AuthUser) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredAuthUser(user: AuthUser | null): void {
+  try {
+    if (user) {
+      localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+    } else {
+      localStorage.removeItem(AUTH_USER_KEY);
+    }
+  } catch {
+    // ignore storage errors
+  }
+}
+
 export function setStoredAuthToken(token: string | null): void {
   try {
     if (token) {
       localStorage.setItem(AUTH_TOKEN_KEY, token);
     } else {
       localStorage.removeItem(AUTH_TOKEN_KEY);
+      localStorage.removeItem(AUTH_USER_KEY);
     }
     window.dispatchEvent(new Event('repopulse-auth-changed'));
   } catch {

@@ -15,14 +15,18 @@ import {
   AuthUser,
   getCurrentUser,
   getStoredAuthToken,
+  getStoredAuthUser,
   setStoredAuthToken,
+  setStoredAuthUser,
   startGitHubLogin,
 } from './api/client';
 
 export default function App() {
   const location = useLocation();
   const [serviceStatus, setServiceStatus] = useState<'checking' | 'ok' | 'degraded'>('checking');
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(() =>
+    getStoredAuthToken() ? getStoredAuthUser() : null
+  );
   const { locale, toggleLocale, t } = useLocale();
 
   useEffect(() => {
@@ -31,11 +35,22 @@ export default function App() {
         setUser(null);
         return;
       }
+      const cached = getStoredAuthUser();
+      if (cached) {
+        setUser(cached);
+      }
       getCurrentUser()
-        .then(setUser)
-        .catch(() => {
-          setStoredAuthToken(null);
-          setUser(null);
+        .then((freshUser) => {
+          setStoredAuthUser(freshUser);
+          setUser(freshUser);
+        })
+        .catch((err) => {
+          // Only clear the session when the backend explicitly rejects the token (401).
+          // Keep the token & cached user on transient 502/503/network errors.
+          if (err?.response?.status === 401) {
+            setStoredAuthToken(null);
+            setUser(null);
+          }
         });
     };
     loadUser();

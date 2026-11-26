@@ -91,7 +91,7 @@ def verify_oauth_state(state: str) -> bool:
     return bool(data and data.get("kind") == "oauth_state")
 
 
-def create_session_token(user_id: uuid.UUID, *, expires_in_hours: int = 168) -> str:
+def create_session_token(user_id: uuid.UUID, *, expires_in_hours: int = 720) -> str:
     """Create a signed bearer session token for an authenticated user."""
     return _sign_payload(
         {
