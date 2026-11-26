@@ -1,0 +1,74 @@
+name: "RepoPulse Health Check"
+description: "Run RepoPulse repository health analysis directly from GitHub Actions with Job Summary, PR comments, and score threshold gating."
+branding:
+  icon: "activity"
+  color: "green"
+
+inputs:
+  repository:
+    description: "Target GitHub repository in owner/name format"
+    required: false
+    default: "${{ github.repository }}"
+  api-url:
+    description: "Base URL of your RepoPulse backend/app (e.g. https://repopulse.example.com)"
+    required: true
+  min-score:
+    description: "Optional minimum Health Score (0-100). Fails the step if below threshold."
+    required: false
+    default: ""
+  timeout:
+    description: "Maximum seconds to wait for the analysis to finish"
+    required: false
+    default: "180"
+  comment-on-pr:
+    description: "Post or update a RepoPulse summary comment on pull requests (true/false)"
+    required: false
+    default: "false"
+  github-token:
+    description: "GitHub token used when comment-on-pr is true"
+    required: false
+    default: "${{ github.token }}"
+
+outputs:
+  health-score:
+    description: "Computed Health Score (0-100)"
+    value: ${{ steps.run_repopulse.outputs.health-score }}
+  grade:
+    description: "Computed Health Grade (A-F)"
+    value: ${{ steps.run_repopulse.outputs.grade }}
+  bus-factor:
+    description: "Repository Bus Factor"
+    value: ${{ steps.run_repopulse.outputs.bus-factor }}
+  analysis-id:
+    description: "RepoPulse Analysis UUID"
+    value: ${{ steps.run_repopulse.outputs.analysis-id }}
+  report-url:
+    description: "Direct URL to the full RepoPulse report"
+    value: ${{ steps.run_repopulse.outputs.report-url }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Run RepoPulse analysis
+      id: run_repopulse
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: |
+        ARGS=(
+          --repo "${{ inputs.repository }}"
+          --api-url "${{ inputs.api-url }}"
+          --timeout "${{ inputs.timeout }}"
+        )
+        if [ -n "${{ inputs.min-score }}" ]; then
+          ARGS+=(--min-score "${{ inputs.min-score }}")
+        fi
+        if [ "${{ inputs.comment-on-pr }}" = "true" ]; then
+          ARGS+=(--pr-comment)
+        fi
+        python "${{ github.action_path }}/cli/repopulse_cli.py" "${ARGS[@]}"
