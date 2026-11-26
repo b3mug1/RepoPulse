@@ -291,6 +291,35 @@ async def compare_analyses(
     return AnalysisComparisonOut(left=left_out, right=right_out, deltas=deltas)
 
 
+# ── GET /analyses/benchmark ──────────────────────────────────────────────────
+
+
+@router.get(
+    "/benchmark",
+    response_model=list[AnalysisDetailOut],
+    summary="Benchmark 2 to 5 analyses side by side",
+)
+async def benchmark_analyses(
+    ids: str = Query(..., description="Comma-separated list of 2 to 5 analysis UUIDs"),
+    session: AsyncSession = Depends(get_db),
+    use_case: GetAnalysisUseCase = Depends(get_analysis_detail_use_case),
+) -> list[AnalysisDetailOut]:
+    raw_ids = [part.strip() for part in ids.split(",") if part.strip()]
+    if len(raw_ids) < 2 or len(raw_ids) > 5:
+        raise HTTPException(status_code=422, detail="Provide between 2 and 5 analysis IDs")
+
+    results: list[AnalysisDetailOut] = []
+    for raw_id in raw_ids:
+        try:
+            aid = uuid.UUID(raw_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=f"Invalid UUID: {raw_id}") from exc
+        data = await use_case.execute(aid)
+        repo = await session.get(RepositoryModel, data["analysis"].repository_id)
+        results.append(_build_analysis_detail(data, repo))
+    return results
+
+
 # ── GET /analyses/shared/{token} ─────────────────────────────────────────────
 
 
