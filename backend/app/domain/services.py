@@ -11,6 +11,13 @@ from typing import Sequence
 from app.domain.entities import CommitStats, Contributor
 
 HEALTH_FORMULA_VERSION = "1.1"
+HEALTH_WEIGHTS: dict[str, int] = {
+    "activity": 25,
+    "collaboration": 20,
+    "documentation": 20,
+    "testing": 20,
+    "automation": 15,
+}
 
 
 def to_utc(dt: datetime) -> datetime:
@@ -176,13 +183,7 @@ def calculate_repository_health(
     The score is normalized over available signals. Unknown signals do not count as
     zero; coverage reports how much of the configured 100% weighting is measured.
     """
-    weights = {
-        "activity": 25,
-        "collaboration": 20,
-        "documentation": 20,
-        "testing": 20,
-        "automation": 15,
-    }
+    weights = HEALTH_WEIGHTS
     paths = {path.replace("\\", "/").lower().lstrip("./") for path in file_paths or []}
     components: dict[str, dict] = {}
 

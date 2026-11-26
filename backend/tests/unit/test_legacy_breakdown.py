@@ -56,3 +56,7 @@ def test_build_analysis_detail_normalizes_legacy_int_breakdown() -> None:
     )
     assert detail.health.breakdown["activity"].score == 100
     assert detail.health.breakdown["collaboration"].status == "legacy"
+    assert detail.health.breakdown["activity"].weight == 25
+    assert detail.health.coverage == 100
+    assert detail.health.score == 88
+    assert detail.health.grade == "Excellent"

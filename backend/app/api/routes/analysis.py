@@ -43,6 +43,7 @@ from app.api.schemas import (
 )
 from app.domain.services import (
     HEALTH_FORMULA_VERSION,
+    HEALTH_WEIGHTS,
     calculate_health_confidence,
     to_utc,
 )
@@ -114,11 +115,17 @@ def _normalize_breakdown(raw: dict | None) -> dict[str, dict]:
             normalized[key] = val
         else:
             score_val = int(val) if isinstance(val, (int, float)) else None
+            weight = HEALTH_WEIGHTS.get(str(key), 0)
+            weighted_points = (
+                round(score_val * weight / 100, 2)
+                if score_val is not None and weight > 0
+                else None
+            )
             normalized[key] = {
                 "label": str(key).replace("_", " ").title(),
                 "score": score_val,
-                "weight": 0,
-                "weighted_points": None,
+                "weight": weight,
+                "weighted_points": weighted_points,
                 "status": "legacy" if score_val is not None else "unknown",
                 "explanation": "Legacy score breakdown from an earlier RepoPulse scan.",
                 "evidence": "Re-run analysis for full component evidence.",
@@ -144,7 +151,25 @@ def _build_analysis_detail(
         key=lambda x: x.date,
     )
     sampled_count = data["commits_count"]
-    confidence = calculate_health_confidence(analysis.health_coverage, analysis.total_commits)
+    breakdown = _normalize_breakdown(analysis.health_breakdown)
+    coverage = analysis.health_coverage
+    health_score = analysis.health_score if coverage else None
+
+    if not coverage and breakdown:
+        measured_weight = sum(
+            item.get("weight", 0)
+            for item in breakdown.values()
+            if item.get("score") is not None and item.get("weight", 0) > 0
+        )
+        if measured_weight > 0:
+            coverage = measured_weight
+            health_score = round(
+                sum(item.get("weighted_points") or 0 for item in breakdown.values())
+                * 100
+                / measured_weight
+            )
+
+    confidence = calculate_health_confidence(coverage, analysis.total_commits)
 
     return AnalysisDetailOut(
         id=analysis.id,
@@ -155,12 +180,12 @@ def _build_analysis_detail(
         status=analysis.status.value if hasattr(analysis.status, "value") else analysis.status,
         progress_stage=analysis.progress_stage,
         health={
-            "score": analysis.health_score if analysis.health_coverage else None,
-            "coverage": analysis.health_coverage,
+            "score": health_score,
+            "coverage": coverage,
             "confidence": confidence,
-            "grade": "Insufficient data" if not analysis.health_coverage else "Excellent" if analysis.health_score >= 80 else "Healthy" if analysis.health_score >= 60 else "Needs attention" if analysis.health_score >= 40 else "At risk",
+            "grade": "Insufficient data" if not coverage or health_score is None else "Excellent" if health_score >= 80 else "Healthy" if health_score >= 60 else "Needs attention" if health_score >= 40 else "At risk",
             "formula_version": HEALTH_FORMULA_VERSION,
-            "breakdown": _normalize_breakdown(analysis.health_breakdown),
+            "breakdown": breakdown,
             "findings": analysis.health_findings or [],
         },
         sample_scope={
