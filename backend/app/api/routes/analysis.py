@@ -362,6 +362,7 @@ async def list_analyses(
             id=a.id,
             status=a.status.value if hasattr(a.status, "value") else a.status,
             total_commits=a.total_commits,
+            commits_per_month=a.commits_per_month,
             bus_factor=a.bus_factor,
             health_score=a.health_score if a.health_coverage else None,
             health_coverage=a.health_coverage,

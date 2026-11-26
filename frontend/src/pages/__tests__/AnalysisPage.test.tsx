@@ -12,6 +12,8 @@ vi.mock('recharts', () => ({
   Tooltip: () => null,
   BarChart: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Bar: () => null,
+  LineChart: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Line: () => null,
   XAxis: () => null,
   YAxis: () => null,
   CartesianGrid: () => null,
@@ -98,6 +100,7 @@ describe('AnalysisPage', () => {
     await waitFor(() => {
       expect(screen.getByText('acme/demo')).toBeInTheDocument();
     });
+    expect(screen.getByText('90-Day Activity Heatmap')).toBeInTheDocument();
     const csvLink = screen.getByRole('link', { name: /export csv/i });
     expect(csvLink).toHaveAttribute(
       'href',
@@ -154,5 +157,45 @@ describe('AnalysisPage', () => {
       expect(screen.getByText('Loading commit details (50/100)')).toBeInTheDocument();
     });
     expect(screen.getByRole('button', { name: /cancel analysis/i })).toBeInTheDocument();
+  });
+
+  it('renders health trend chart when multiple completed analyses exist', async () => {
+    vi.spyOn(client, 'getAnalysis').mockResolvedValue(baseCompleted);
+    vi.spyOn(client, 'getAnalysisHistory').mockResolvedValue([
+      {
+        id: 'prev-1',
+        status: 'completed',
+        total_commits: 8,
+        commits_per_month: 8,
+        bus_factor: 2,
+        health_score: 74,
+        health_coverage: 100,
+        created_at: '2025-06-01T00:00:00Z',
+        completed_at: '2025-06-01T00:01:00Z',
+      },
+      {
+        id: baseCompleted.id,
+        status: 'completed',
+        total_commits: 10,
+        commits_per_month: 10,
+        bus_factor: 2,
+        health_score: 82,
+        health_coverage: 100,
+        created_at: '2025-06-10T00:00:00Z',
+        completed_at: '2025-06-10T00:01:00Z',
+      },
+    ]);
+
+    render(
+      <MemoryRouter initialEntries={['/analysis/11111111-1111-1111-1111-111111111111']}>
+        <Routes>
+          <Route path="/analysis/:id" element={<AnalysisPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Health Score & Velocity Trend/i)).toBeInTheDocument();
+    });
   });
 });

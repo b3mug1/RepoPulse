@@ -162,6 +162,7 @@ class AnalysisListItem(BaseModel):
     id: uuid.UUID
     status: str
     total_commits: int
+    commits_per_month: float = 0.0
     bus_factor: int
     health_score: Optional[int]
     health_coverage: int

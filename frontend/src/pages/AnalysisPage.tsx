@@ -22,6 +22,8 @@ import AIInsightsPanel from '../components/AIInsightsPanel';
 import CommitFrequencyChart from '../components/CommitFrequencyChart';
 import RepositoryHealthPanel from '../components/RepositoryHealthPanel';
 import ExtendedSignalsPanel from '../components/ExtendedSignalsPanel';
+import ActivityHeatmap from '../components/ActivityHeatmap';
+import HealthTrendChart from '../components/HealthTrendChart';
 
 function estimateProgressPercent(stage: string): number {
   const s = stage.toLowerCase();
@@ -268,6 +270,7 @@ export default function AnalysisPage() {
     <section className="analysis-section report-block"><div className="report-block-heading"><span className="section-index">01</span><div><span className="analysis-overline">PROJECT PULSE</span><h2>Engineering signals</h2></div></div><MetricsGrid metrics={analysis.metrics} /></section>
     <div className="analysis-section mt-4"><ExtendedSignalsPanel signals={analysis.extended_signals} /></div>
     <section className="grid grid-cols-1 lg:grid-cols-2 gap-4 analysis-section"><LanguagePieChart distribution={analysis.metrics.language_distribution} /><CommitFrequencyChart data={analysis.metrics.commits_per_date} /></section>
+    <div className="analysis-section mt-4"><ActivityHeatmap data={analysis.metrics.commits_per_date} referenceDate={analysis.sample_scope.window_end_at} /></div>
     <section className="analysis-section">
       <div className="report-block-heading"><span className="section-index">02</span><div><span className="analysis-overline">THE PEOPLE</span><h2>Contribution map</h2></div></div>
       {analysis.contributors.length > 0 ? (
@@ -279,7 +282,7 @@ export default function AnalysisPage() {
     {(analysis.ai_insights.ai_summary || analysis.ai_insights.detected_tech_stack.length > 0 || analysis.ai_insights.ai_metadata?.status === 'unavailable') && (
       <section className="analysis-section"><div className="report-block-heading"><span className="section-index">03</span><div><span className="analysis-overline">MACHINE-ASSISTED CONTEXT</span><h2>Project understanding</h2></div></div><AIInsightsPanel insights={analysis.ai_insights} /></section>
     )}
-    {!isSharedMode && history.length > 1 && <section className="glass p-6 analysis-section"><div className="report-block-heading"><span className="section-index"><Clock3 size={16} /></span><div><span className="analysis-overline">LONGITUDINAL VIEW</span><h2>Analysis history</h2></div></div><div className="history-list">{history.map((item) => <Link key={item.id} to={`/analysis/${item.id}`} className={`history-row ${item.id === analysis.id ? 'history-current' : ''}`}><span>{new Date(item.created_at).toLocaleString()}</span><span className="history-status">{item.status}</span><strong>Health {item.health_score ?? '—'}<small> / 100</small></strong></Link>)}</div></section>}
+    {!isSharedMode && history.length > 1 && <section className="glass p-6 analysis-section"><div className="report-block-heading"><span className="section-index"><Clock3 size={16} /></span><div><span className="analysis-overline">LONGITUDINAL VIEW</span><h2>Analysis history</h2></div></div><HealthTrendChart history={history} /><div className="history-list">{history.map((item) => <Link key={item.id} to={`/analysis/${item.id}`} className={`history-row ${item.id === analysis.id ? 'history-current' : ''}`}><span>{new Date(item.created_at).toLocaleString()}</span><span className="history-status">{item.status}</span><strong>Health {item.health_score ?? '—'}<small> / 100</small></strong></Link>)}</div></section>}
     <footer className="mt-8 text-[11px] text-slate-400 border-t border-white/40 pt-4">
       Limitations: Metrics are computed from up to {analysis.sample_scope.max_commits_limit} sampled commits ({analysis.sample_scope.timezone}) and GitHub metadata. RepoPulse does not measure individual developer productivity.
     </footer>
